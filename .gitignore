@@ -1,0 +1,43 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+
+# Vite/React
+.vite/
+coverage/
+
+# Misc
+*.log
+*.lock
+*.tmp
+*.swp
+
+# VSCode
+.vscode/
+
+# SQLite DB
+*.sqlite
+*.db
+
+# Reports
+report/
+
+# Ignore local .env and config
+*.local
