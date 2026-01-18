@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Login from './components/Login';
+import LoginPage from './pages/LoginPage';
 import Dashboard from './components/Dashboard';
 import Layout from './components/Layout';
 
@@ -8,10 +8,10 @@ function App() {
   const setToken = t => { if (t) localStorage.setItem('token', t); else localStorage.removeItem('token') }
   return (
     <Routes>
-      <Route path="/login" element={<Login setToken={setToken} />} />
+      <Route path="/" element={<LoginPage setToken={setToken} />} />
       <Route
-        path="/*"
-        element={token ? <Layout token={token} setToken={setToken}><Dashboard token={token} setToken={setToken} /></Layout> : <Navigate to="/login" />}
+        path="/dashboard"
+        element={token ? <Layout token={token} setToken={setToken}><Dashboard token={token} setToken={setToken} /></Layout> : <Navigate to="/" />}
       />
     </Routes>
   );

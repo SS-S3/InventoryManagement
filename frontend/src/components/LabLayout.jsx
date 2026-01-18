@@ -22,8 +22,8 @@ const LabLayout = ({ token }) => {
   };
 
   const cabinets = [];
-  for (let row = 1; row <= 5; row++) {
-    for (let col = 1; col <= 5; col++) {
+  for (let row = 1; row <= 2; row++) {
+    for (let col = 1; col <= 6; col++) {
       const label = String.fromCharCode(64 + row) + col;
       cabinets.push(label);
     }
@@ -59,7 +59,7 @@ const LabLayout = ({ token }) => {
           <div className="flex justify-between items-center">
             <CardTitle className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-primary" />
-              Lab Cabinet Layout (5x5 Grid)
+              Lab Cabinet Layout 
             </CardTitle>
             <div className="flex items-center gap-4 text-sm">
               <div className="flex items-center gap-2">
