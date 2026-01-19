@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Button } from './ui/button';
+import { Button } from './ui/stateful-button';
 import { Input } from './ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Label } from './ui/label';
+import { CometCard } from './ui/comet-card';
 import { Search, Plus, Trash2, Edit2, Package, X, Check } from 'lucide-react';
+import { HoverEffect } from './ui/card-hover-effect';
+import { cn } from '@/lib/utils';
 
 const InventoryList = ({ token, userRole }) => {
   const [items, setItems] = useState([]);
@@ -17,7 +20,6 @@ const InventoryList = ({ token, userRole }) => {
   }, []);
 
   useEffect(() => {
-    // Filter items based on search query
     const filtered = items.filter(item =>
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -36,7 +38,7 @@ const InventoryList = ({ token, userRole }) => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     try {
       if (editingId) {
         await axios.put(`http://localhost:3000/items/${editingId}`, form, { headers: { Authorization: token } });
@@ -73,192 +75,168 @@ const InventoryList = ({ token, userRole }) => {
     setForm({ name: '', description: '', cabinet: '', quantity: 0 });
   };
 
-  const getQuantityColor = (quantity) => {
-    if (quantity === 0) return 'bg-destructive/20 text-destructive border-destructive/50';
-    if (quantity < 5) return 'bg-warning/20 text-warning border-warning/50';
-    return 'bg-success/20 text-success border-success/50';
+  const getQuantityBadge = (quantity) => {
+    if (quantity === 0) return 'bg-red-500/20 text-red-500';
+    if (quantity < 5) return 'bg-yellow-500/20 text-yellow-500';
+    return 'bg-green-500/20 text-green-500';
   };
 
+  const hoverItems = filteredItems.map(item => ({
+    title: item.name,
+    description: (
+      <div className="flex flex-col gap-2">
+        <p className="line-clamp-2 text-sm text-neutral-500 dark:text-neutral-400">
+          {item.description || "No detailed specs provided."}
+        </p>
+        <div className="flex items-center justify-between mt-2 pt-3 border-t border-neutral-200 dark:border-neutral-800">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-1 bg-neutral-100 dark:bg-neutral-800 rounded text-[10px] font-bold text-neutral-500 uppercase tracking-widest">
+              📍 {item.cabinet}
+            </span>
+          </div>
+          <div className={cn(
+            "px-3 py-1 rounded-full text-[11px] font-bold shadow-sm",
+            getQuantityBadge(item.quantity)
+          )}>
+            {item.quantity} in stock
+          </div>
+        </div>
+        {userRole === 'admin' && (
+          <div className="flex gap-2 mt-4 pointer-events-auto">
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); startEdit(item); }}
+              className="flex-1 py-1.5 px-3 bg-neutral-200 dark:bg-neutral-800 hover:bg-blue-500/20 hover:text-blue-500 transition-colors rounded-lg text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-1"
+            >
+              <Edit2 className="w-3 h-3" /> Edit
+            </button>
+            <button
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); deleteItem(item.id); }}
+              className="p-1.5 px-3 bg-neutral-200 dark:bg-neutral-800 hover:bg-red-500/20 hover:text-red-500 transition-colors rounded-lg text-xs flex items-center justify-center"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+      </div>
+    ),
+    link: '#',
+  }));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-10 max-w-7xl mx-auto">
       {/* Add/Edit Form - Admin Only */}
       {userRole === 'admin' && (
-        <Card className="border-2 border-primary/20 shadow-lg hover-lift">
-          <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10">
-            <CardTitle className="flex items-center gap-2">
-              {editingId ? (
-                <>
-                  <Edit2 className="w-5 h-5 text-accent" />
-                  Edit Item
-                </>
-              ) : (
-                <>
-                  <Plus className="w-5 h-5 text-primary" />
-                  Add New Item
-                </>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <CometCard>
+          <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/80 backdrop-blur shadow-xl p-8 space-y-8">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <Package className="w-6 h-6 text-blue-500" />
+              </div>
+              <h2 className="text-2xl font-bold text-neutral-800 dark:text-neutral-100">
+                {editingId ? "Update Asset Identity" : "Catalog New Asset"}
+              </h2>
+            </div>
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Item Name *</label>
+                <Label htmlFor="item-name" className="text-xs font-bold uppercase tracking-widest text-neutral-500">Asset Title *</Label>
                 <Input
+                  id="item-name"
                   type="text"
-                  placeholder="e.g., Arduino Uno"
+                  placeholder="e.g., Lidar Sensor Pro"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="bg-input/50"
                   required
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Cabinet Location *</label>
+                <Label htmlFor="item-cabinet" className="text-xs font-bold uppercase tracking-widest text-neutral-500">Storage Unit Index *</Label>
                 <Input
+                  id="item-cabinet"
                   type="text"
-                  placeholder="e.g., A1, B2"
+                  placeholder="e.g., A4"
                   value={form.cabinet}
                   onChange={(e) => setForm({ ...form, cabinet: e.target.value.toUpperCase() })}
-                  className="bg-input/50"
                   required
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Description</label>
+              <div className="space-y-2 md:col-span-1">
+                <Label htmlFor="item-description" className="text-xs font-bold uppercase tracking-widest text-neutral-500">Technical Briefing</Label>
                 <Input
+                  id="item-description"
                   type="text"
-                  placeholder="Brief description"
+                  placeholder="High-frequency precision optics..."
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="bg-input/50"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Quantity *</label>
+                <Label htmlFor="item-quantity" className="text-xs font-bold uppercase tracking-widest text-neutral-500">Unit Quantity *</Label>
                 <Input
+                  id="item-quantity"
                   type="number"
                   placeholder="0"
                   value={form.quantity}
                   onChange={(e) => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })}
-                  className="bg-input/50"
                   min="0"
                   required
                 />
               </div>
 
-              <div className="md:col-span-2 flex gap-2">
-                <Button type="submit" className="flex-1 gradient-primary text-white">
-                  {editingId ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Update Item
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Item
-                    </>
-                  )}
+              <div className="md:col-span-2 flex gap-4 mt-2">
+                <Button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white border-none py-3 text-sm font-semibold uppercase tracking-widest">
+                  {editingId ? "Commit Changes" : "Register Item"}
                 </Button>
                 {editingId && (
-                  <Button type="button" variant="outline" onClick={cancelEdit} className="border-destructive/50 text-destructive hover:bg-destructive/10">
-                    <X className="w-4 h-4 mr-2" />
-                    Cancel
-                  </Button>
+                  <button
+                    type="button"
+                    onClick={cancelEdit}
+                    className="px-5 py-2 bg-neutral-100 dark:bg-neutral-800 hover:bg-red-500/10 hover:text-red-500 text-neutral-600 dark:text-neutral-300 rounded-2xl font-semibold uppercase tracking-widest transition-colors"
+                  >
+                    Discard
+                  </button>
                 )}
               </div>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </CometCard>
       )}
 
-      {/* Item List */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-primary" />
-              Inventory Items ({filteredItems.length})
-            </CardTitle>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search items..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-input/50"
-              />
+      {/* Item List Header */}
+      <div className="space-y-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 px-2">
+          <h2 className="text-3xl font-bold flex items-center gap-3 text-neutral-800 dark:text-neutral-100">
+            <div className="p-2 bg-blue-500/10 rounded-lg">
+              <Package className="w-7 h-7 text-blue-500" />
             </div>
+            Inventory Registry ({filteredItems.length})
+          </h2>
+          <div className="relative w-full md:w-80">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <Input
+              type="text"
+              placeholder="Search by label or location..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-12"
+            />
           </div>
-        </CardHeader>
-        <CardContent>
+        </div>
+
+        <div className="bg-neutral-50/50 dark:bg-neutral-900/50 rounded-3xl border border-neutral-200 dark:border-neutral-800 p-4 min-h-[400px]">
           {filteredItems.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Package className="w-16 h-16 mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-medium">No items found</p>
-              <p className="text-sm">
-                {searchQuery ? 'Try a different search term' : 'Add your first inventory item above'}
-              </p>
+            <div className="text-center py-32 text-neutral-500">
+              <Package className="w-20 h-20 mx-auto mb-4 opacity-5" />
+              <p className="text-xl font-medium">No assets matching criteria</p>
+              <p className="text-sm">Verify the search query or check the cabinet index.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map(item => (
-                <Card
-                  key={item.id}
-                  className={`hover-lift transition-all h-full flex flex-col justify-between ${editingId === item.id ? 'ring-2 ring-primary' : ''}`}
-                >
-                  <CardContent className="p-4 flex-1">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-lg mb-1 text-foreground">{item.name}</h4>
-                        <p className="text-sm text-muted-foreground line-clamp-2">{item.description || 'No description'}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
-                      <div className="flex items-center gap-3">
-                        <div className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-medium">
-                          📍 {item.cabinet}
-                        </div>
-                        <div className={`px-2 py-1 rounded text-xs font-semibold border ${getQuantityColor(item.quantity)}`}>
-                          {item.quantity} in stock
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-
-                  {/* Edit/Delete Buttons - Admin Only */}
-                  {userRole === 'admin' && (
-                    <div className="bg-muted/30 px-4 py-3 flex gap-2 border-t border-border/50">
-                      <Button
-                        onClick={() => startEdit(item)}
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 hover:bg-primary/10 hover:text-primary hover:border-primary"
-                      >
-                        <Edit2 className="w-3 h-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        onClick={() => deleteItem(item.id)}
-                        variant="outline"
-                        size="sm"
-                        className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              ))}
-            </div>
+            <HoverEffect items={hoverItems} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };

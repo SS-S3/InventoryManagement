@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { motion } from "framer-motion";
-import { Button } from './ui/button';
+import { Button } from './ui/stateful-button';
 import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { CometCard } from './ui/comet-card';
 import { LogIn, UserPlus, Lock, User as UserIcon } from 'lucide-react';
 import HeroSectionOne from './HeroSectionOne';
-import HeroActions from './ui/HeroActions';
 
 const Login = ({ setToken }) => {
   const [username, setUsername] = useState('');
@@ -46,113 +45,94 @@ const Login = ({ setToken }) => {
 
   return (
     <HeroSectionOne title={"Welcome to Robotics Lab Inventory"} subtitle={"Sign in to access and manage your lab's inventory efficiently."}>
-      <div className="relative z-10 mt-8 max-w-md mx-auto">
+      <div className="relative z-10 mt-8 max-w-md mx-auto space-y-6">
         {error && (
-          <div className="mb-4 p-3 bg-destructive/20 border border-destructive/50 rounded-lg text-destructive text-sm animate-fade-in">
+          <div className="p-3 bg-destructive/20 border border-destructive/50 rounded-lg text-destructive text-sm">
             ⚠️ {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground/80">Username</label>
-            <div className="relative">
-              <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="pl-10 bg-input/50 border-border/50 focus:border-primary transition-all"
-                required
-              />
+        <CometCard>
+          <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/80 backdrop-blur p-8 shadow-xl space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10"
+                    required
+                  />
+                </div>
+              </div>
+
+              {isRegister && (
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select value={role} onValueChange={setRole}>
+                    <SelectTrigger id="role">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="user">👤 User</SelectItem>
+                      <SelectItem value="admin">👑 Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white border-none py-3 text-sm font-semibold uppercase tracking-widest"
+                disabled={loading}
+              >
+                {loading ? 'Processing…' : isRegister ? 'Create Account' : 'Sign In'}
+              </Button>
+            </form>
+
+            <div className="text-center space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister(!isRegister);
+                  setError('');
+                }}
+                className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                {isRegister ? '← Already have an account? Sign in' : "Don't have an account? Create one →"}
+              </button>
+
+              {!isRegister && (
+                <div className="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-lg text-xs text-neutral-600 dark:text-neutral-300">
+                  💡 <strong>Demo:</strong> admin / admin123
+                </div>
+              )}
             </div>
           </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground/80">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 bg-input/50 border-border/50 focus:border-primary transition-all"
-                required
-              />
-            </div>
-          </div>
-
-          {isRegister && (
-            <div className="space-y-2 animate-fade-in">
-              <label className="text-sm font-medium text-foreground/80">Role</label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger className="bg-input/50 border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">👤 User</SelectItem>
-                  <SelectItem value="admin">👑 Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <Button
-            type="submit"
-            className="w-full gradient-primary hover:opacity-90 transition-all font-semibold text-white shadow-lg hover-lift"
-            disabled={loading}
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                Processing...
-              </span>
-            ) : (
-              <>
-                {isRegister ? <UserPlus className="w-4 h-4 mr-2" /> : <LogIn className="w-4 h-4 mr-2" />}
-                {isRegister ? 'Create Account' : 'Sign In'}
-              </>
-            )}
-          </Button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <Button
-            variant="link"
-            onClick={() => {
-              setIsRegister(!isRegister);
-              setError('');
-            }}
-            className="text-primary hover:text-accent transition-colors"
-          >
-            {isRegister ? '← Already have an account? Sign in' : "Don't have an account? Create one →"}
-          </Button>
-        </div>
-
-        {!isRegister && (
-          <div className="mt-4 p-3 bg-muted/30 rounded-lg text-xs text-muted-foreground text-center">
-            💡 <strong>Demo:</strong> admin / admin123
-          </div>
-        )}
-
-        <div className="mt-6 flex items-center justify-center gap-4">
-          <HeroActions />
-        </div>
+        </CometCard>
       </div>
     </HeroSectionOne>
-  );
-};
-
-const Navbar = () => {
-  return (
-    <nav className="flex w-full items-center justify-between border-t border-b border-neutral-200 px-4 py-4 dark:border-neutral-800">
-      <div className="flex items-center gap-2">
-        <div className="size-7 rounded-full bg-gradient-to-br from-violet-500 to-pink-500" />
-        <h1 className="text-base font-bold md:text-2xl">Robotics Lab Inventory</h1>
-      </div>
-    </nav>
   );
 };
 

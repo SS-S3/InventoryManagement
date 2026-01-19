@@ -1,86 +1,152 @@
 import React from 'react';
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 
-export function HeroSectionOne({ title = 'Launch your website in hours, not days', subtitle, children }) {
-  const words = title.split(' ');
+export function HeroSectionOne({
+  title = "Inventory intelligence for modern labs",
+  subtitle = "Track assets, approvals, and borrowing in one connected workspace designed for high-performing research teams.",
+  onLoginClick,
+  onExploreClick,
+  stats = [],
+  children,
+}) {
+  const headlineWords = title.split(" ");
+
   return (
-    <div className="relative mx-auto my-10 flex max-w-7xl flex-col items-center justify-center">
-      <Navbar />
+    <div className="relative mx-auto flex w-full max-w-6xl flex-col items-center px-4 pb-20 pt-10 md:pb-28 md:pt-16">
+      <Navbar onLoginClick={onLoginClick} />
 
-      <div className="absolute inset-y-0 left-0 h-full w-px bg-neutral-200/80 dark:bg-neutral-800/80">
-        <div className="absolute top-0 h-40 w-px bg-gradient-to-b from-transparent via-blue-500 to-transparent" />
-      </div>
-      <div className="absolute inset-y-0 right-0 h-full w-px bg-neutral-200/80 dark:bg-neutral-800/80">
-        <div className="absolute h-40 w-px bg-gradient-to-b from-transparent via-blue-500 to-transparent" />
-      </div>
-      <div className="absolute inset-x-0 bottom-0 h-px w-full bg-neutral-200/80 dark:bg-neutral-800/80">
-        <div className="absolute mx-auto h-px w-40 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
-      </div>
+      <div className="mt-16 grid w-full gap-10 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-center">
+        <div>
+          <motion.span
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+          >
+            Smart laboratory operations
+          </motion.span>
 
-      <div className="px-4 py-10 md:py-20">
-        <h1 className="relative z-10 mx-auto max-w-4xl text-center text-2xl font-bold text-slate-700 md:text-4xl lg:text-7xl dark:text-slate-300">
-          {words.map((word, index) => (
-            <motion.span
-              key={index}
-              initial={{ opacity: 0, filter: 'blur(4px)', y: 10 }}
-              animate={{ opacity: 1, filter: 'blur(0px)', y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.08, ease: 'easeInOut' }}
-              className="mr-2 inline-block"
-            >
-              {word}
-            </motion.span>
-          ))}
-        </h1>
+          <h1 className="mt-6 text-balance text-3xl font-bold text-neutral-900 md:text-5xl lg:text-6xl dark:text-neutral-50">
+            {headlineWords.map((word, index) => (
+              <motion.span
+                key={word + index}
+                initial={{ opacity: 0, filter: "blur(4px)", y: 12 }}
+                animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.04, ease: "easeInOut" }}
+                className="mr-2 inline-block"
+              >
+                {word}
+              </motion.span>
+            ))}
+          </h1>
 
-        {subtitle && (
           <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.8 }}
-            className="relative z-10 mx-auto max-w-xl py-4 text-center text-lg font-normal text-neutral-600 dark:text-neutral-400"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.4 }}
+            className="mt-6 max-w-xl text-lg leading-7 text-neutral-600 dark:text-neutral-300"
           >
             {subtitle}
           </motion.p>
-        )}
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.55 }}
+            className="mt-10 flex flex-wrap items-center gap-4"
+          >
+            <button
+              type="button"
+              onClick={onLoginClick}
+              className="inline-flex items-center justify-center rounded-full bg-neutral-900 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-neutral-900/10 transition hover:-translate-y-0.5 hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
+            >
+              Access dashboard
+            </button>
+            <button
+              type="button"
+              onClick={onExploreClick}
+              className="inline-flex items-center justify-center rounded-full border border-neutral-300 px-6 py-3 text-sm font-semibold text-neutral-800 transition hover:-translate-y-0.5 hover:border-neutral-400 dark:border-neutral-700 dark:text-neutral-100 dark:hover:border-neutral-500"
+            >
+              Explore capabilities
+            </button>
+          </motion.div>
+
+          <motion.dl
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.65 }}
+            className="mt-12 grid grid-cols-2 gap-6 text-left sm:grid-cols-3"
+          >
+            {stats.map((item) => (
+              <div key={item.label}>
+                <dt className="text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  {item.label}
+                </dt>
+                <dd className="mt-1 text-2xl font-semibold text-neutral-900 dark:text-neutral-50">
+                  {item.value}
+                </dd>
+              </div>
+            ))}
+          </motion.dl>
+        </div>
 
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, delay: 1 }}
-          className="relative z-10 mt-8 flex flex-wrap items-center justify-center gap-4"
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, delay: 0.4, ease: "easeOut" }}
+          className="relative overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-800 dark:bg-neutral-900"
         >
-          {children}
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 1.2 }}
-          className="relative z-10 mt-20 rounded-3xl border border-neutral-200 bg-neutral-100 p-4 shadow-md dark:border-neutral-800 dark:bg-neutral-900"
-        >
-          <div className="w-full overflow-hidden rounded-xl border border-gray-300 dark:border-gray-700">
-            <img
-              src="https://assets.aceternity.com/pro/aceternity-landing.webp"
-              alt="Landing preview"
-              className="aspect-[16/9] h-auto w-full object-cover"
-              height={1000}
-              width={1000}
-            />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-cyan-500/10" />
+          <div className="relative px-6 py-8">
+            <p className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Live utilization snapshot
+            </p>
+            <ul className="mt-6 space-y-4 text-sm text-neutral-600 dark:text-neutral-300">
+              <li className="flex items-center justify-between">
+                <span>Borrowed instruments</span>
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">24</span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span>Queued maintenance</span>
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">8</span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span>Open competition slots</span>
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">12</span>
+              </li>
+              <li className="flex items-center justify-between">
+                <span>Last sync</span>
+                <span className="font-semibold text-neutral-900 dark:text-neutral-100">2m ago</span>
+              </li>
+            </ul>
           </div>
         </motion.div>
       </div>
+
+      {children && (
+        <div className="mt-16 w-full">{children}</div>
+      )}
     </div>
   );
 }
 
-const Navbar = () => {
+const Navbar = ({ onLoginClick }) => {
   return (
-    <nav className="flex w-full items-center justify-between border-t border-b border-neutral-200 px-4 py-4 dark:border-neutral-800">
-      <div className="flex items-center gap-2">
-        <div className="size-7 rounded-full bg-gradient-to-br from-violet-500 to-pink-500" />
-        <h1 className="text-base font-bold md:text-2xl">Aceternity UI</h1>
+    <nav className="flex w-full items-center justify-between rounded-full border border-neutral-200 bg-white/80 px-6 py-4 backdrop-blur-md dark:border-neutral-800 dark:bg-neutral-900/60">
+      <div className="flex items-center gap-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+        <div className="size-8 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500" />
+        <span>Inventory Lab</span>
       </div>
-      <button className="w-24 transform rounded-lg bg-black px-6 py-2 font-medium text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-gray-800 md:w-32 dark:bg-white dark:text-black dark:hover:bg-gray-200">
+      <div className="hidden items-center gap-6 text-sm font-medium text-neutral-600 md:flex dark:text-neutral-300">
+        <a href="#features" className="transition hover:text-neutral-900 dark:hover:text-white">Features</a>
+        <a href="#workflows" className="transition hover:text-neutral-900 dark:hover:text-white">Workflows</a>
+        <a href="#showcase" className="transition hover:text-neutral-900 dark:hover:text-white">Showcase</a>
+      </div>
+      <button
+        type="button"
+        onClick={onLoginClick}
+        className="inline-flex items-center justify-center rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white shadow hover:-translate-y-0.5 hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
+      >
         Login
       </button>
     </nav>

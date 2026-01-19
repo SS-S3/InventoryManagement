@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Button } from './ui/button';
-import { Users, Shield, UserCog, Check } from 'lucide-react';
+import { Users, Shield, Fingerprint, Lock } from 'lucide-react';
+import { CometCard } from './ui/comet-card';
+import { cn } from '@/lib/utils';
 
 const UserManagement = ({ token }) => {
     const [users, setUsers] = useState([]);
@@ -30,76 +30,109 @@ const UserManagement = ({ token }) => {
                 { role: newRole },
                 { headers: { Authorization: token } }
             );
-            // Optimistic update or refetch
             setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
-            // Could add toast here
         } catch (err) {
             console.error('Error updating role:', err);
             alert('Failed to update role');
         }
     };
 
-    if (loading) return <div className="text-center p-8">Loading Users...</div>;
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center p-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+        );
+    }
 
     return (
-        <Card className="shadow-lg border-2 border-primary/10">
-            <CardHeader className="bg-gradient-to-r from-primary/5 to-accent/5">
-                <CardTitle className="flex items-center gap-2">
-                    <Users className="w-6 h-6 text-primary" />
-                    User Management
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-muted/50 text-xs uppercase text-muted-foreground font-medium">
-                            <tr>
-                                <th className="px-6 py-4">Username</th>
-                                <th className="px-6 py-4">Current Role</th>
-                                <th className="px-6 py-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/50">
-                            {users.map((user) => (
-                                <tr key={user.id} className="hover:bg-muted/20 transition-colors">
-                                    <td className="px-6 py-4 font-medium flex items-center gap-2">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${user.role === 'admin' ? 'bg-accent/20 text-accent' : 'bg-secondary text-muted-foreground'}`}>
-                                            {user.role === 'admin' ? <Shield className="w-4 h-4" /> : <UserCog className="w-4 h-4" />}
-                                        </div>
-                                        {user.username}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${user.role === 'admin'
-                                                ? 'bg-accent/10 text-accent border border-accent/20'
-                                                : 'bg-primary/10 text-primary border border-primary/20'
-                                            }`}>
-                                            {user.role.toUpperCase()}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2 w-40">
-                                            <Select
-                                                value={user.role}
-                                                onValueChange={(val) => updateUserRole(user.id, val)}
-                                                disabled={user.username === 'admin'} // Prevent creating a lockout if this is the super admin
-                                            >
-                                                <SelectTrigger className="h-8 text-xs bg-background/50">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="user">User</SelectItem>
-                                                    <SelectItem value="admin">Admin</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+        <div className="space-y-10 max-w-7xl mx-auto">
+            <CometCard>
+                <div className="border border-neutral-200 dark:border-neutral-800 bg-white/90 dark:bg-neutral-900/80 backdrop-blur overflow-hidden shadow-2xl rounded-3xl">
+                    <div className="bg-neutral-50/80 dark:bg-neutral-900/80 border-b border-neutral-200 dark:border-neutral-800 p-8">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3 text-2xl font-bold text-neutral-800 dark:text-neutral-100">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                    <Users className="w-6 h-6 text-blue-500" />
+                                </div>
+                                Access Control Panel
+                            </div>
+                            <span className="text-sm font-bold text-neutral-500 uppercase tracking-widest bg-neutral-100 dark:bg-neutral-800 px-4 py-2 rounded-full">
+                                {users.length} Active Accounts
+                            </span>
+                        </div>
+                    </div>
+                    <div className="p-0">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-neutral-50/50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-800">
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-neutral-500">Identity</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-neutral-500">Authorization Level</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-neutral-500 text-right">Operational Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                                    {users.map((user) => (
+                                        <tr key={user.id} className="hover:bg-neutral-50/50 dark:hover:bg-neutral-900/30 transition-colors group">
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={cn(
+                                                        "w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110",
+                                                        user.role === 'admin' ? 'bg-blue-600/10 text-blue-600' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500'
+                                                    )}>
+                                                        {user.role === 'admin' ? <Shield className="w-6 h-6" /> : <Fingerprint className="w-6 h-6" />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-black text-lg text-neutral-800 dark:text-neutral-200 uppercase tracking-tight">{user.username}</p>
+                                                        <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">ID: PTRN-{user.id.toString().padStart(4, '0')}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={cn(
+                                                        "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm",
+                                                        user.role === 'admin'
+                                                            ? 'bg-blue-600 text-white'
+                                                            : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                                                    )}>
+                                                        {user.role}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="px-8 py-6">
+                                                <div className="flex items-center justify-end gap-3">
+                                                    {user.username === 'admin' ? (
+                                                        <div className="flex items-center gap-2 px-4 py-2 bg-neutral-100 dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700">
+                                                            <Lock className="w-3 h-3 text-neutral-500" />
+                                                            <span className="text-[10px] font-black text-neutral-500 uppercase">SYSTEM PROTECTED</span>
+                                                        </div>
+                                                    ) : (
+                                                        <Select
+                                                            value={user.role}
+                                                            onValueChange={(val) => updateUserRole(user.id, val)}
+                                                        >
+                                                            <SelectTrigger className="w-32 h-10 bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-[10px] font-black uppercase tracking-widest">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800">
+                                                                <SelectItem value="user"><span className="text-[10px] font-black uppercase">Standard User</span></SelectItem>
+                                                                <SelectItem value="admin"><span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Administrator</span></SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-            </CardContent>
-        </Card>
+            </CometCard>
+        </div>
     );
 };
 
