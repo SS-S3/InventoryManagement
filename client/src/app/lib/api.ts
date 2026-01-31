@@ -1,4 +1,14 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3000";
+// ===========================================
+// API Configuration
+// ===========================================
+// Uses Vite environment variable for the API base URL
+// Set VITE_API_BASE in .env.local for development
+// Set VITE_API_BASE in Vercel dashboard for production
+//
+// Development: http://localhost:8080
+// Production:  https://your-app-name.onrender.com
+// ===========================================
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080";
 
 export type UserRole = "admin" | "member";
 

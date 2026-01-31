@@ -1,5 +1,40 @@
 {
+  "name": "inventory-management",
+  "version": "1.0.0",
+  "description": "Full-stack Inventory Management System for Robotics Labs - Deployable to Vercel, Render, and Turso",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "cd server && npm start",
+    "dev:client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "build:client": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "db:migrate": "cd server && npm run db:migrate",
+    "db:seed": "cd server && npm run db:seed",
+    "test": "cd server && npm test",
+    "test:client": "cd client && npm test"
+  },
+  "keywords": [
+    "inventory",
+    "management",
+    "react",
+    "express",
+    "turso",
+    "vite",
+    "robotics",
+    "lab"
+  ],
+  "author": "",
+  "license": "MIT",
   "dependencies": {
     "framer-motion": "^12.27.5"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

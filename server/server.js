@@ -1,3 +1,8 @@
+// ===========================================
+// Load environment variables FIRST - before any other imports
+// ===========================================
+require('dotenv').config();
+
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
@@ -11,14 +16,41 @@ const cron = require('node-cron');
 const axios = require('axios');
 const RSSParser = require('rss-parser');
 const { URL } = require('url');
-require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// ===========================================
+// Environment Configuration
+// ===========================================
+// Server port - Render uses PORT env variable (default 8080 for deployment)
+const PORT = process.env.PORT || 8080;
+
+// Database path - SQLite for development, Turso for production
 const DB_PATH = process.env.DB_PATH || './inventory.db';
+
+// JWT Secret - MUST be set in production via environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
+
+// Environment mode
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
+
+// ===========================================
+// Turso Database Configuration (for production)
+// ===========================================
+// When migrating to Turso, install @libsql/client and use:
+//
+// const { createClient } = require('@libsql/client');
+//
+// const tursoClient = createClient({
+//   url: process.env.TURSO_DATABASE_URL,      // e.g., libsql://your-db-name.turso.io
+//   authToken: process.env.TURSO_AUTH_TOKEN,  // Your Turso auth token from dashboard
+// });
+//
+// Then replace sqlite3 calls with tursoClient.execute() calls
+// ===========================================
+
+// RSS Article sources (optional feature)
 const ARTICLE_SOURCES = (process.env.ROBOTICS_ARTICLE_SOURCES || '')
     .split(',')
     .map((src) => src.trim())
