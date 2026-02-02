@@ -126,23 +126,14 @@ export function ForgotPassword({ onBack, apiBase }: ForgotPasswordProps) {
                     <span>Verifying...</span>
                   </div>
                 ) : (
-                  (import.meta.env.VITE_ENABLE_GOOGLE_OAUTH === 'true' ? (
-                    <GoogleLogin
-                      onSuccess={handleGoogleSuccess}
-                      onError={handleGoogleError}
-                      theme="filled_black"
-                      size="large"
-                      text="continue_with"
-                      shape="rectangular"
-                    />
-                  ) : (
-                    <button
-                      onClick={() => alert('Google login is temporarily disabled')}
-                      className="px-4 py-2 bg-neutral-800 text-neutral-300 rounded-lg"
-                    >
-                      Verify with Google (disabled)
-                    </button>
-                  ))
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    theme="filled_black"
+                    size="large"
+                    text="continue_with"
+                    shape="rectangular"
+                  />
                 )}
               </div>
             </div>

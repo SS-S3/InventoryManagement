@@ -426,16 +426,43 @@ app.post(
 
 app.post(
     '/login',
-    [body('email').notEmpty(), body('password').notEmpty(), validate],
+    [
+        body('email').optional().isString().trim(),
+        body('username').optional().isString().trim(),
+        body('password').notEmpty().withMessage('Password is required.'),
+        body()
+            .custom((_, { req }) => {
+                const rawEmail = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+                const rawUsername = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+                if (!rawEmail && !rawUsername) {
+                    throw new Error('Email or username is required.');
+                }
+                req.body.email = rawEmail || undefined;
+                req.body.username = rawUsername || undefined;
+                return true;
+            }),
+        validate
+    ],
     asyncHandler(async (req, res) => {
-        const { email, password } = req.body;
-        console.log(`[LOGIN_ATTEMPT] Email/Username: ${email}`);
+        const { email, username, password } = req.body;
+        const identifierSource = typeof email === 'string' && email.length ? email : username;
+        const identifier = (identifierSource || '').trim();
+        if (!identifier) {
+            res.status(400).json({ error: 'Email or username is required.' });
+            return;
+        }
+        const normalizedIdentifier = identifier.toLowerCase();
+        const identifierType = email ? 'email' : 'username';
 
-        // Support login by email or username for backwards compatibility
-        const user = await dbGet('SELECT * FROM users WHERE email = ? OR username = ?', [email, email]);
+        console.log(`[LOGIN_ATTEMPT] ${identifierType.toUpperCase()}: ${identifier}`);
+
+        const user = await dbGet(
+            'SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?',
+            [normalizedIdentifier, normalizedIdentifier]
+        );
 
         if (!user) {
-            console.warn(`[LOGIN_LEAL] User not found: ${email}`);
+            console.warn(`[LOGIN_FAIL] User not found: ${identifier}`);
             res.status(400).json({ error: 'Invalid credentials.' });
             return;
         }
@@ -447,9 +474,11 @@ app.post(
             return;
         }
 
-        const token = jwt.sign({ id: user.id, role: user.role, username: user.username, email: user.email }, JWT_SECRET, {
-            expiresIn: '24h'
-        });
+        const token = jwt.sign(
+            { id: user.id, role: user.role, username: user.username, email: user.email },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
 
         res.json({ token, user: sanitizeUser(user) });
     })
@@ -511,21 +540,6 @@ app.post(
     })
 );
 
-// Prevent accidental browser fetches to the redirect-based OAuth path.
-// If Google OAuth is configured for redirect (Passport) this route should be handled
-// by the Passport middleware. Otherwise respond with 410 Gone to avoid 5xx noise
-// when the frontend mistakenly performs a fetch to `/auth/google`.
-app.get('/auth/google', (req, res) => {
-    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CALLBACK_URL) {
-        // Passport redirect flow may be expected in some deployments; if passport
-        // middleware is not present we return 501 to indicate not implemented.
-        res.status(501).send('Google OAuth redirect flow not implemented on this server.');
-        return;
-    }
-
-    // Explicitly tell clients that the endpoint is disabled.
-    res.status(410).send('Google OAuth is disabled on this server.');
-});
 
 // --- Password Reset via Google OAuth ---
 

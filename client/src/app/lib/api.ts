@@ -293,10 +293,18 @@ export async function fetchProfile(token: string): Promise<AuthUserResponse> {
 }
 
 export async function loginRequest(username: string, password: string): Promise<AuthResponse> {
+  const identifier = username.trim();
+  const payload: Record<string, string> = { password };
+
+  if (identifier.includes("@")) {
+    payload.email = identifier.toLowerCase();
+  } else {
+    payload.username = identifier;
+  }
+
   return apiRequest<AuthResponse>("/login", {
     method: "POST",
-    // backend accepts email OR username in the `email` field for compatibility
-    body: { email: username, password },
+    body: payload,
   });
 }
 
