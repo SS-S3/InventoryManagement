@@ -1,6 +1,6 @@
 # 🤖 Robotics Lab Inventory Management System
 
-A modern, full-stack inventory management system designed for college robotics labs. Built with React, TypeScript, Node.js, Express, and SQLite (with Turso support for production).
+A modern, full-stack inventory management system designed for college robotics labs. Built with React, TypeScript, Node.js, Express, and Turso (libSQL).
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com)
@@ -121,7 +121,7 @@ InventoryManagement/
 │   Vercel    │────▶│   Render    │────▶│    Turso    │
 │   (Client)  │     │   (Server)  │     │  (Database) │
 └─────────────┘     └─────────────┘     └─────────────┘
-   React App         Express API         libSQL (SQLite)
+   React App         Express API         libSQL (Turso)
 ```
 
 ### 1. Database - Turso
@@ -193,7 +193,8 @@ VITE_API_BASE=http://localhost:8080
 PORT=8080
 NODE_ENV=development
 JWT_SECRET=your_jwt_secret
-DB_PATH=./inventory.db
+TURSO_DATABASE_URL=libsql://your-db-name.turso.io
+TURSO_AUTH_TOKEN=your_auth_token_here
 ALLOWED_ORIGINS=http://localhost:5173
 ```
 
@@ -305,7 +306,7 @@ cd client && npm test
 
 ## 🎯 Roadmap
 
-- [ ] Migrate from SQLite to Turso in production
+- [x] Migrate from SQLite to Turso in production
 - [ ] Email notifications for overdue items
 - [ ] Export data to CSV/Excel
 - [ ] QR code generation for items

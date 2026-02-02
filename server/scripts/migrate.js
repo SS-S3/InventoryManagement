@@ -1,19 +1,33 @@
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const dbPath = process.env.DB_PATH || './inventory.db';
-const db = new sqlite3.Database(path.join(__dirname, '..', dbPath));
+const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL;
+const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
-const runStatement = (sql, params = []) =>
-    new Promise((resolve, reject) => {
-        db.run(sql, params, function (err) {
-            if (err) {
-                return reject(err);
-            }
-            resolve(this);
-        });
-    });
+if (!TURSO_DATABASE_URL || !TURSO_AUTH_TOKEN) {
+    throw new Error('Missing Turso configuration. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the environment.');
+}
+
+let clientPromise;
+
+const getClient = () => {
+    if (!clientPromise) {
+        clientPromise = (async () => {
+            const { connect } = await import('@tursodatabase/serverless');
+            return connect({ url: TURSO_DATABASE_URL, authToken: TURSO_AUTH_TOKEN });
+        })();
+    }
+    return clientPromise;
+};
+
+const runStatement = async (sql, params = []) => {
+    const client = await getClient();
+    if (params.length) {
+        const stmt = client.prepare(sql);
+        return stmt.run(params);
+    }
+    return client.exec(sql);
+};
 
 const runMigrations = async () => {
     console.log('Running migrations...');
@@ -21,6 +35,7 @@ const runMigrations = async () => {
     await runStatement('PRAGMA foreign_keys = OFF');
 
     const dropTargets = [
+        'password_reset_tokens',
         'articles',
         'submissions',
         'assignments',
@@ -245,16 +260,34 @@ const runMigrations = async () => {
 
     await runStatement('CREATE UNIQUE INDEX idx_articles_url_day ON articles(url, fetched_for)');
 
+    await runStatement(`CREATE TABLE password_reset_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+
+    await runStatement('CREATE INDEX idx_reset_tokens_user ON password_reset_tokens(user_id)');
+    await runStatement('CREATE INDEX idx_reset_tokens_expires ON password_reset_tokens(expires_at)');
+
     console.log('Migrations completed successfully.');
 };
 
 runMigrations()
-    .then(() => {
-        db.close();
+    .then(async () => {
+        const client = await getClient();
+        if (client?.close) {
+            await client.close();
+        }
         process.exit(0);
     })
-    .catch((err) => {
+    .catch(async (err) => {
         console.error('Migration failed:', err);
-        db.close();
+        const client = await getClient();
+        if (client?.close) {
+            await client.close();
+        }
         process.exit(1);
     });

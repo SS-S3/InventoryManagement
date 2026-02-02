@@ -231,7 +231,7 @@ export function Competitions() {
                   type="date"
                   value={newCompetition.start_date}
                   onChange={(e) => setNewCompetition({ ...newCompetition, start_date: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2.5 bg-neutral-400 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                 />
               </div>
             </div>

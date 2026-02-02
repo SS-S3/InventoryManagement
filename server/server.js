@@ -4,7 +4,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
@@ -16,41 +15,56 @@ const cron = require('node-cron');
 const axios = require('axios');
 const RSSParser = require('rss-parser');
 const { URL } = require('url');
+const twilio = require('twilio');
+const crypto = require('crypto');
 
 const app = express();
 
 // ===========================================
 // Environment Configuration
 // ===========================================
-// Server port - Render uses PORT env variable (default 8080 for deployment)
-const PORT = process.env.PORT || 8080;
-
-// Database path - SQLite for development, Turso for production
-const DB_PATH = process.env.DB_PATH || './inventory.db';
-
 // JWT Secret - MUST be set in production via environment variable
 const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 
-// Environment mode
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
 
-// ===========================================
-// Turso Database Configuration (for production)
-// ===========================================
-// When migrating to Turso, install @libsql/client and use:
-//
-// const { createClient } = require('@libsql/client');
-//
-// const tursoClient = createClient({
-//   url: process.env.TURSO_DATABASE_URL,      // e.g., libsql://your-db-name.turso.io
-//   authToken: process.env.TURSO_AUTH_TOKEN,  // Your Turso auth token from dashboard
-// });
-//
-// Then replace sqlite3 calls with tursoClient.execute() calls
-// ===========================================
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_FROM;
 
-// RSS Article sources (optional feature)
+let twilioClient = null;
+if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
+    try {
+        twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    } catch (err) {
+        console.error('Failed to initialize Twilio client:', err.message);
+        twilioClient = null;
+    }
+}
+
+const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL;
+const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
+
+if (!TURSO_DATABASE_URL || !TURSO_AUTH_TOKEN) {
+    throw new Error('Missing Turso configuration. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the environment.');
+}
+
+let tursoClientPromise = null;
+
+const getTursoClient = () => {
+    if (!tursoClientPromise) {
+        tursoClientPromise = (async () => {
+            const { connect } = await import('@tursodatabase/serverless');
+            return connect({
+                url: TURSO_DATABASE_URL,
+                authToken: TURSO_AUTH_TOKEN
+            });
+        })();
+    }
+    return tursoClientPromise;
+};
+
 const ARTICLE_SOURCES = (process.env.ROBOTICS_ARTICLE_SOURCES || '')
     .split(',')
     .map((src) => src.trim())
@@ -59,85 +73,88 @@ const ARTICLES_PER_SOURCE = Number(process.env.ROBOTICS_ARTICLE_LIMIT || 5);
 
 const rssParser = new RSSParser();
 
-// --- Security & Middleware ---
-// Production-grade Helmet configuration
 app.use(helmet({
     contentSecurityPolicy: IS_PRODUCTION ? undefined : false,
     crossOriginEmbedderPolicy: IS_PRODUCTION,
-    hsts: IS_PRODUCTION ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+    hsts: IS_PRODUCTION ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false
 }));
 
-// CORS configuration
 const corsOptions = {
-    origin: IS_PRODUCTION 
-        ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://yourdomain.com']
-        : true,
+    origin: IS_PRODUCTION ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://yourdomain.com'] : true,
     credentials: true,
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
-// Logging - structured in production
 app.use(morgan(IS_PRODUCTION ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting - stricter in production
 const limiter = rateLimit({
-    windowMs: IS_PRODUCTION ? 15 * 60 * 1000 : 1 * 60 * 1000, // 15 min in prod, 1 min in dev
-    max: IS_PRODUCTION ? 100 : 500, // 100 in prod, 500 in dev
+    windowMs: IS_PRODUCTION ? 15 * 60 * 1000 : 60 * 1000,
+    max: IS_PRODUCTION ? 100 : 500,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests, please try again later.' },
-    skip: (req) => req.path === '/health' // Skip health checks
+    skip: (req) => req.path === '/health'
 });
 app.use(limiter);
 
-// Health check endpoint for load balancers
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// --- Database Connection & Helpers ---
-const db = new sqlite3.Database(DB_PATH, (err) => {
-    if (err) {
-        console.error('Error opening database:', err.message);
-    } else {
-        console.log('Connected to SQLite database.');
+const prepareStatement = async (sql) => {
+    const client = await getTursoClient();
+    return client.prepare(sql);
+};
+
+const toNumber = (value) => {
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === 'bigint') return Number(value);
+    if (typeof value === 'string' && /^-?\d+$/.test(value)) return Number(value);
+    return value;
+};
+
+const normalizeRow = (row) => {
+    if (!row) return row;
+    const normalized = {};
+    for (const [key, value] of Object.entries(row)) {
+        normalized[key] = typeof value === 'bigint' ? Number(value) : value;
     }
-});
+    return normalized;
+};
 
-const dbRun = (sql, params = []) =>
-    new Promise((resolve, reject) => {
-        db.run(sql, params, function (err) {
-            if (err) return reject(err);
-            resolve(this);
-        });
-    });
+const dbRun = async (sql, params = []) => {
+    const stmt = await prepareStatement(sql);
+    const result = await stmt.run(params);
+    return {
+        lastID: toNumber(result.lastInsertRowid),
+        changes: toNumber(result.changes) || 0
+    };
+};
 
-const dbGet = (sql, params = []) =>
-    new Promise((resolve, reject) => {
-        db.get(sql, params, (err, row) => {
-            if (err) return reject(err);
-            resolve(row || null);
-        });
-    });
+const dbGet = async (sql, params = []) => {
+    const stmt = await prepareStatement(sql);
+    const rows = await stmt.all(params);
+    return rows.length > 0 ? normalizeRow(rows[0]) : null;
+};
 
-const dbAll = (sql, params = []) =>
-    new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-            if (err) return reject(err);
-            resolve(rows || []);
-        });
-    });
+const dbAll = async (sql, params = []) => {
+    const stmt = await prepareStatement(sql);
+    const rows = await stmt.all(params);
+    return rows.map(normalizeRow);
+};
 
 const withTransaction = async (callback) => {
-    await dbRun('BEGIN TRANSACTION');
+    const client = await getTursoClient();
+    await client.exec('BEGIN');
     try {
-        await callback();
-        await dbRun('COMMIT');
+        const result = await callback();
+        await client.exec('COMMIT');
+        return result;
     } catch (err) {
-        await dbRun('ROLLBACK');
+        await client.exec('ROLLBACK');
         throw err;
     }
 };
@@ -198,7 +215,7 @@ const authenticateToken = asyncHandler(async (req, res, next) => {
     }
 
     const user = await dbGet(
-        'SELECT id, username, role, full_name, roll_number, phone, email, department, is_verified, created_at FROM users WHERE id = ?',
+        'SELECT id, username, role, full_name, roll_number, phone, email, gender, department, branch, is_verified, created_at FROM users WHERE id = ?',
         [decoded.id]
     );
 
@@ -250,20 +267,17 @@ const fetchArticlesFromSource = async (sourceUrl) => {
     const host = extractHost(sourceUrl);
 
     try {
-        const feed = await rssParser.parseURL(sourceUrl);
-        return normalizeArticleList(feed.items, host);
-    } catch (rssErr) {
-        try {
-            const response = await axios.get(sourceUrl, { timeout: 10000 });
-            const payload = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
-            const entries = Array.isArray(payload)
-                ? payload
-                : payload?.articles || payload?.items || payload?.data || [];
-            return normalizeArticleList(entries, host);
-        } catch (err) {
-            console.error(`Failed to fetch articles from ${sourceUrl}:`, err.message);
-            return [];
+        if (sourceUrl.includes('medium.com/feed') || sourceUrl.endsWith('.rss') || sourceUrl.endsWith('.xml')) {
+            const feed = await rssParser.parseURL(sourceUrl);
+            return normalizeArticleList(feed.items || [], host);
         }
+
+        const response = await axios.get(sourceUrl, { timeout: 10000 });
+        const data = Array.isArray(response.data) ? response.data : response.data?.articles;
+        return normalizeArticleList(data || [], host);
+    } catch (err) {
+        console.error(`Failed to fetch articles from ${sourceUrl}:`, err.message);
+        return [];
     }
 };
 
@@ -310,10 +324,8 @@ const fetchAndStoreArticles = async () => {
     console.log(`Stored ${deduped.length} robotics articles for ${today}.`);
 };
 
-// Trigger initial fetch on startup
 fetchAndStoreArticles().catch((err) => console.error('Initial article fetch failed:', err.message));
 
-// Schedule daily fetch at 3 PM server time
 cron.schedule('0 15 * * *', () => {
     fetchAndStoreArticles().catch((err) => console.error('Scheduled article fetch failed:', err.message));
 });
@@ -390,6 +402,135 @@ app.post(
         });
 
         res.json({ token, user: sanitizeUser(user) });
+    })
+);
+
+// --- Password Reset ---
+
+app.post(
+    '/forgot-password',
+    [body('phone').trim().notEmpty().withMessage('Phone number is required'), validate],
+    asyncHandler(async (req, res) => {
+        const { phone } = req.body;
+
+        if (!twilioClient || !TWILIO_FROM_NUMBER) {
+            res.status(503).json({ error: 'SMS service is not configured.' });
+            return;
+        }
+
+        const user = await dbGet('SELECT id, phone, full_name FROM users WHERE phone = ?', [phone]);
+
+        if (!user) {
+            res.json({ message: 'If an account with that number exists, a reset code has been sent.' });
+            return;
+        }
+
+        const resetCode = crypto.randomInt(100000, 999999).toString();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+        await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [user.id]);
+
+        const hashedCode = await bcrypt.hash(resetCode, 10);
+        await dbRun(
+            'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+            [user.id, hashedCode, expiresAt]
+        );
+
+        try {
+            await twilioClient.messages.create({
+                body: `SR-DTU Inventory reset code: ${resetCode}. It expires in 15 minutes.`,
+                from: TWILIO_FROM_NUMBER,
+                to: user.phone
+            });
+            console.log(`Password reset code sent via SMS to ${user.phone}`);
+        } catch (smsError) {
+            console.error('Failed to send reset SMS:', smsError);
+            await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [user.id]);
+            res.status(500).json({ error: 'Failed to send reset SMS. Please try again.' });
+            return;
+        }
+
+        res.json({ message: 'If an account with that number exists, a reset code has been sent.' });
+    })
+);
+
+app.post(
+    '/verify-reset-code',
+    [
+        body('phone').trim().notEmpty().withMessage('Phone number is required'),
+        body('code').isLength({ min: 6, max: 6 }).withMessage('Invalid code format'),
+        validate
+    ],
+    asyncHandler(async (req, res) => {
+        const { phone, code } = req.body;
+
+        const user = await dbGet('SELECT id FROM users WHERE phone = ?', [phone]);
+        if (!user) {
+            res.status(400).json({ error: 'Invalid phone number or code.' });
+            return;
+        }
+
+        const token = await dbGet(
+            'SELECT * FROM password_reset_tokens WHERE user_id = ? AND expires_at > datetime("now")',
+            [user.id]
+        );
+
+        if (!token) {
+            res.status(400).json({ error: 'Invalid or expired reset code.' });
+            return;
+        }
+
+        const isValid = await bcrypt.compare(code, token.token_hash);
+        if (!isValid) {
+            res.status(400).json({ error: 'Invalid or expired reset code.' });
+            return;
+        }
+
+        const resetToken = jwt.sign({ userId: user.id, purpose: 'password-reset' }, JWT_SECRET, { expiresIn: '10m' });
+
+        res.json({ valid: true, resetToken });
+    })
+);
+
+app.post(
+    '/reset-password',
+    [
+        body('resetToken').notEmpty().withMessage('Reset token is required'),
+        body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+        validate
+    ],
+    asyncHandler(async (req, res) => {
+        const { resetToken, newPassword } = req.body;
+
+        // Verify the reset token
+        let decoded;
+        try {
+            decoded = jwt.verify(resetToken, JWT_SECRET);
+            if (decoded.purpose !== 'password-reset') {
+                throw new Error('Invalid token purpose');
+            }
+        } catch (err) {
+            res.status(400).json({ error: 'Invalid or expired reset token.' });
+            return;
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update user's password
+        await dbRun('UPDATE users SET password = ?, updated_at = datetime("now") WHERE id = ?', [hashedPassword, decoded.userId]);
+
+        // Delete all reset tokens for this user
+        await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [decoded.userId]);
+
+        // Log the action
+        const user = await dbGet('SELECT username FROM users WHERE id = ?', [decoded.userId]);
+        await dbRun(
+            'INSERT INTO history (user_id, username, action, details) VALUES (?, ?, ?, ?)',
+            [decoded.userId, user?.username, 'PASSWORD_RESET', 'Password was reset via SMS verification']
+        );
+
+        res.json({ message: 'Password has been reset successfully.' });
     })
 );
 
@@ -1282,113 +1423,85 @@ app.post(
 );
 
 // 6. Projects & Allocations
-
-app.get('/projects', authenticateToken, (req, res) => {
-  db.all('SELECT * FROM projects', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-app.post('/projects', authenticateToken, isAdmin, (req, res) => {
-  const { name, description } = req.body;
-  db.run('INSERT INTO projects (name, description) VALUES (?, ?)', [name, description], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    logHistory(req.user.id, req.user.username, 'CREATE_PROJECT', `Created project: ${name}`);
-    res.json({ id: this.lastID });
-  });
-});
-
-app.get('/allocations', authenticateToken, (req, res) => {
-  db.all('SELECT a.*, i.name as item_name, p.name as project_name FROM allocations a JOIN items i ON a.item_id = i.id JOIN projects p ON a.project_id = p.id', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-app.post('/allocations', authenticateToken, isAdmin, (req, res) => {
-  const { item_id, project_id, allocated_quantity } = req.body;
-
-  db.serialize(() => {
-    db.run("BEGIN TRANSACTION");
-
-    // 1. Check stock
-    db.get("SELECT quantity FROM items WHERE id = ?", [item_id], (err, row) => {
-      if (err) {
-        db.run("ROLLBACK");
-        return res.status(500).json({ error: err.message });
-      }
-      if (!row || row.quantity < allocated_quantity) {
-        db.run("ROLLBACK");
-        return res.status(400).json({ error: "Insufficient stock for allocation" });
-      }
-
-      // 2. Deduct stock
-      db.run("UPDATE items SET quantity = quantity - ? WHERE id = ?", [allocated_quantity, item_id], (err) => {
-        if (err) {
-          db.run("ROLLBACK");
-          return res.status(500).json({ error: err.message });
-        }
-
-        // 3. Create allocation
-        db.run('INSERT INTO allocations (item_id, project_id, allocated_quantity) VALUES (?, ?, ?)',
-          [item_id, project_id, allocated_quantity],
-          function (err) {
-            if (err) {
-              db.run("ROLLBACK");
-              return res.status(500).json({ error: err.message });
-            }
-            db.run("COMMIT");
-            logHistory(req.user.id, req.user.username, 'ALLOCATE_RESOURCE', `Allocated quantity ${allocated_quantity} of Item ${item_id} to Project ${project_id}`);
-            res.json({ id: this.lastID });
-          }
+app.get(
+    '/allocations',
+    authenticateToken,
+    asyncHandler(async (req, res) => {
+        const allocations = await dbAll(
+            `SELECT a.*, i.name AS item_name, p.name AS project_name
+             FROM allocations a
+             JOIN items i ON a.item_id = i.id
+             JOIN projects p ON a.project_id = p.id
+             ORDER BY a.id DESC`
         );
-      });
-    });
-  });
-});
+        res.json(allocations);
+    })
+);
 
-app.delete('/allocations/:id', authenticateToken, isAdmin, (req, res) => {
-  const allocationId = req.params.id;
+app.post(
+    '/allocations',
+    authenticateToken,
+    isAdmin,
+    asyncHandler(async (req, res) => {
+        const { item_id, project_id, allocated_quantity } = req.body;
 
-  db.serialize(() => {
-    db.run("BEGIN TRANSACTION");
+        const allocationId = await withTransaction(async () => {
+            const item = await dbGet('SELECT quantity FROM items WHERE id = ?', [item_id]);
+            if (!item || item.quantity < allocated_quantity) {
+                const error = new Error('Insufficient stock for allocation');
+                error.status = 400;
+                throw error;
+            }
 
-    // 1. Get the allocation details to know what to restore
-    db.get("SELECT item_id, allocated_quantity FROM allocations WHERE id = ?", [allocationId], (err, row) => {
-      if (err) {
-        db.run("ROLLBACK");
-        return res.status(500).json({ error: err.message });
-      }
-      if (!row) {
-        db.run("ROLLBACK");
-        return res.status(404).json({ error: "Allocation not found" });
-      }
+            await dbRun('UPDATE items SET quantity = quantity - ? WHERE id = ?', [allocated_quantity, item_id]);
+            const allocation = await dbRun(
+                'INSERT INTO allocations (item_id, project_id, allocated_quantity) VALUES (?, ?, ?)',
+                [item_id, project_id, allocated_quantity]
+            );
 
-      const { item_id, allocated_quantity } = row;
+            await logHistory(
+                req.user.id,
+                req.user.username,
+                'ALLOCATE_RESOURCE',
+                `Allocated quantity ${allocated_quantity} of Item ${item_id} to Project ${project_id}`
+            );
 
-      // 2. Restore the item quantity
-      db.run("UPDATE items SET quantity = quantity + ? WHERE id = ?", [allocated_quantity, item_id], (err) => {
-        if (err) {
-          db.run("ROLLBACK");
-          return res.status(500).json({ error: err.message });
-        }
-
-        // 3. Delete the allocation record
-        db.run("DELETE FROM allocations WHERE id = ?", [allocationId], function (err) {
-          if (err) {
-            db.run("ROLLBACK");
-            return res.status(500).json({ error: err.message });
-          }
-
-          db.run("COMMIT");
-          logHistory(req.user.id, req.user.username, 'REMOVE_ALLOCATION', `Removed allocation ID: ${allocationId} (Restored ${allocated_quantity} items)`);
-          res.json({ message: "Allocation removed and items restored" });
+            return allocation.lastID;
         });
-      });
-    });
-  });
-});
+
+        res.json({ id: allocationId });
+    })
+);
+
+app.delete(
+    '/allocations/:id',
+    authenticateToken,
+    isAdmin,
+    asyncHandler(async (req, res) => {
+        const allocationId = Number(req.params.id);
+
+        await withTransaction(async () => {
+            const allocation = await dbGet('SELECT item_id, allocated_quantity FROM allocations WHERE id = ?', [allocationId]);
+            if (!allocation) {
+                const error = new Error('Allocation not found');
+                error.status = 404;
+                throw error;
+            }
+
+            await dbRun('UPDATE items SET quantity = quantity + ? WHERE id = ?', [allocation.allocated_quantity, allocation.item_id]);
+            await dbRun('DELETE FROM allocations WHERE id = ?', [allocationId]);
+
+            await logHistory(
+                req.user.id,
+                req.user.username,
+                'ALLOCATE_RESOURCE_REVOKE',
+                `Revoked allocation ${allocationId} and restored stock for Item ${allocation.item_id}`
+            );
+        });
+
+        res.json({ message: 'Allocation removed and stock restored.' });
+    })
+);
 
 // --- Projects ---
 app.get(
@@ -1661,23 +1774,4 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Graceful shutdown
-const gracefulShutdown = (signal) => {
-    console.log(`\n${signal} received. Closing database connection...`);
-    db.close((err) => {
-        if (err) {
-            console.error('Error closing database:', err.message);
-            process.exit(1);
-        }
-        console.log('Database connection closed. Exiting...');
-        process.exit(0);
-    });
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT} in ${NODE_ENV} mode`);
-});
+module.exports = app;

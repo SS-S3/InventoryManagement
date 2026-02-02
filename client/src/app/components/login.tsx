@@ -7,11 +7,12 @@ import { Button } from "@/app/components/ui/button";
 interface LoginProps {
   onLogin: (credentials: { email: string; password: string }) => Promise<void>;
   onSwitchToRegister: () => void;
+  onForgotPassword: () => void;
   isSubmitting: boolean;
   error?: string | null;
 }
 
-export function Login({ onLogin, onSwitchToRegister, isSubmitting, error }: LoginProps) {
+export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitting, error }: LoginProps) {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -116,6 +117,7 @@ export function Login({ onLogin, onSwitchToRegister, isSubmitting, error }: Logi
               </label>
               <button
                 type="button"
+                onClick={onForgotPassword}
                 className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors"
               >
                 Forgot password?
@@ -140,9 +142,9 @@ export function Login({ onLogin, onSwitchToRegister, isSubmitting, error }: Logi
 
           {/* Demo Credentials */}
           <div className="mt-6 p-4 bg-blue-950/30 rounded-lg border border-blue-800/50">
-            <p className="text-sm font-medium text-blue-300 mb-2">Demo Credentials:</p>
-            <p className="text-xs text-blue-400">Admin: admin@example.com / admin123</p>
-            <p className="text-xs text-blue-400">Member: member@example.com / member123</p>
+            {/* <p className="text-sm font-medium text-blue-300 mb-2">Demo Credentials:</p> */}
+            {/* <p className="text-xs text-blue-400">Admin: admin@example.com / admin123</p> */}
+            {/* <p className="text-xs text-blue-400">Member: member@example.com / member123</p> */}
           </div>
 
           {/* Register Link */}

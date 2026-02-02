@@ -12,6 +12,7 @@ import { Reports } from "@/app/components/reports";
 import { WeeklyTasks } from "@/app/components/weekly-tasks";
 import { Login } from "@/app/components/login";
 import { Register, RegisterData } from "@/app/components/register";
+import { ForgotPassword } from "@/app/components/forgot-password";
 import { MemberDashboard } from "@/app/components/member-dashboard";
 import { RequestTool } from "@/app/components/request-tool";
 import { RequestHistory } from "@/app/components/request-history";
@@ -22,10 +23,11 @@ import { useAuth } from "@/app/providers/auth-provider";
 
 const DEFAULT_ADMIN_PAGE = "dashboard";
 const DEFAULT_MEMBER_PAGE = "member-dashboard";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 export default function App() {
   const { user, login, register, logout, isLoading } = useAuth();
-  const [authView, setAuthView] = useState<"login" | "register">("login");
+  const [authView, setAuthView] = useState<"login" | "register" | "forgot-password">("login");
   const [currentPage, setCurrentPage] = useState<string>(DEFAULT_ADMIN_PAGE);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -134,10 +136,20 @@ export default function App() {
   }
 
   if (!user) {
+    if (authView === "forgot-password") {
+      return (
+        <ForgotPassword
+          onBack={() => setAuthView("login")}
+          apiBase={API_BASE}
+        />
+      );
+    }
+    
     return authView === "login" ? (
       <Login
         onLogin={handleLogin}
         onSwitchToRegister={() => setAuthView("register")}
+        onForgotPassword={() => setAuthView("forgot-password")}
         isSubmitting={isAuthenticating}
         error={authError}
       />

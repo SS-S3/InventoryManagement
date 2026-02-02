@@ -1,20 +1,34 @@
-const sqlite3 = require('sqlite3').verbose();
-const bcrypt = require('bcryptjs');
 const path = require('path');
+const bcrypt = require('bcryptjs');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-const dbPath = process.env.DB_PATH || './inventory.db';
-const db = new sqlite3.Database(path.join(__dirname, '..', dbPath));
+const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL;
+const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
-const runStatement = (sql, params = []) =>
-    new Promise((resolve, reject) => {
-        db.run(sql, params, function (err) {
-            if (err) {
-                return reject(err);
-            }
-            resolve(this);
-        });
-    });
+if (!TURSO_DATABASE_URL || !TURSO_AUTH_TOKEN) {
+    throw new Error('Missing Turso configuration. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the environment.');
+}
+
+let clientPromise;
+
+const getClient = () => {
+    if (!clientPromise) {
+        clientPromise = (async () => {
+            const { connect } = await import('@tursodatabase/serverless');
+            return connect({ url: TURSO_DATABASE_URL, authToken: TURSO_AUTH_TOKEN });
+        })();
+    }
+    return clientPromise;
+};
+
+const runStatement = async (sql, params = []) => {
+    const client = await getClient();
+    if (params.length) {
+        const stmt = client.prepare(sql);
+        return stmt.run(params);
+    }
+    return client.exec(sql);
+};
 
 const hashPassword = (password) =>
     new Promise((resolve, reject) => {
@@ -122,7 +136,6 @@ const seed = async () => {
             memberUser.branch
         ]);
 
-        // Seed items
         const items = [
             { name: 'Soldering Iron', category: 'Electronics', description: 'Temperature-controlled soldering iron', quantity: 5, available_quantity: 5 },
             { name: 'Multimeter', category: 'Electronics', description: 'Digital multimeter for voltage/current measurement', quantity: 10, available_quantity: 10 },
@@ -142,7 +155,6 @@ const seed = async () => {
         }
         console.log('Items seeded successfully.');
 
-        // Seed competitions
         const competitions = [
             { name: 'Robotics Challenge 2026', description: 'Annual robotics competition', start_date: '2026-03-01', end_date: '2026-03-15', status: 'upcoming' },
             { name: 'Hackathon Spring', description: '48-hour coding hackathon', start_date: '2026-04-10', end_date: '2026-04-12', status: 'upcoming' },
@@ -157,7 +169,6 @@ const seed = async () => {
         }
         console.log('Competitions seeded successfully.');
 
-        // Seed projects
         const projects = [
             { name: 'Autonomous Robot', description: 'Build an autonomous navigation robot', status: 'active', lead_id: 1, start_date: '2026-01-15', end_date: '2026-06-01' },
             { name: 'Smart Home System', description: 'IoT-based home automation system', status: 'planning', lead_id: 1, start_date: '2026-03-01', end_date: '2026-08-01' },
@@ -172,7 +183,6 @@ const seed = async () => {
         }
         console.log('Projects seeded successfully.');
 
-        // Seed assignments
         const assignments = [
             { title: 'Weekly Report', description: 'Submit weekly progress report', due_date: '2026-02-07', status: 'active' },
             { title: 'Component Inventory', description: 'Update component inventory list', due_date: '2026-02-14', status: 'active' },
@@ -187,13 +197,11 @@ const seed = async () => {
         }
         console.log('Assignments seeded successfully.');
 
-        // Seed submissions for the member user (id=2)
         await runStatement(
             `INSERT INTO submissions (assignment_id, user_id, github_link, submitted_at, status) VALUES (3, 2, 'https://github.com/member/safety-training', datetime('now'), 'pass')`
         );
         console.log('Submissions seeded successfully.');
 
-        // Seed requests (member user id=2 requesting tools)
         const requests = [
             { user_id: 2, title: 'Need Oscilloscope for Project', tool_name: 'Oscilloscope', quantity: 1, reason: 'Signal analysis for autonomous robot project', expected_return_date: '2026-02-15', status: 'pending' },
             { user_id: 2, title: 'Arduino for Prototyping', tool_name: 'Arduino Uno', quantity: 2, reason: 'Prototyping control system', expected_return_date: '2026-02-20', status: 'pending' },
@@ -219,7 +227,6 @@ const seed = async () => {
         }
         console.log('Requests seeded successfully.');
 
-        // Seed borrowings (approved requests become borrowings)
         await runStatement(
             `INSERT INTO borrowings (user_id, request_id, tool_name, quantity, borrowed_at, expected_return_date, notes) 
              VALUES (2, 3, 'Multimeter', 1, datetime('now', '-1 day'), '2026-02-10', 'Approved for circuit testing')`
@@ -227,11 +234,17 @@ const seed = async () => {
         console.log('Borrowings seeded successfully.');
 
         console.log('Database seeded successfully.');
-        db.close();
+        const client = await getClient();
+        if (client?.close) {
+            await client.close();
+        }
         process.exit(0);
     } catch (err) {
         console.error('Seeding failed:', err);
-        db.close();
+        const client = await getClient();
+        if (client?.close) {
+            await client.close();
+        }
         process.exit(1);
     }
 };
