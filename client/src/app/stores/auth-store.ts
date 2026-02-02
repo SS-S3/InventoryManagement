@@ -20,7 +20,7 @@ interface AuthState {
   isProcessing: boolean;
   error: AuthError;
   hydrate: () => Promise<void>;
-  login: (email: string, password: string) => Promise<AuthUserResponse>;
+  login: (username: string, password: string) => Promise<AuthUserResponse>;
   register: (payload: RegisterPayload) => Promise<AuthUserResponse>;
   logout: () => void;
   setUser: (user: AuthUserResponse | null) => void;
@@ -86,11 +86,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user: null, token: null, isHydrated: true, isProcessing: false, error: null });
     }
   },
-  login: async (email, password) => {
+  login: async (username, password) => {
     set({ isProcessing: true, error: null });
 
     try {
-      const response: AuthResponse = await loginRequest(email, password);
+      const response: AuthResponse = await loginRequest(username, password);
       persistSession(response.token, response.user);
       set({ user: response.user, token: response.token, isProcessing: false, error: null, isHydrated: true });
       return response.user;

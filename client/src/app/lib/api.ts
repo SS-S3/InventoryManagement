@@ -292,10 +292,11 @@ export async function fetchProfile(token: string): Promise<AuthUserResponse> {
   return apiRequest<AuthUserResponse>("/profile", { token });
 }
 
-export async function loginRequest(email: string, password: string): Promise<AuthResponse> {
+export async function loginRequest(username: string, password: string): Promise<AuthResponse> {
   return apiRequest<AuthResponse>("/login", {
     method: "POST",
-    body: { email, password },
+    // backend accepts email OR username in the `email` field for compatibility
+    body: { email: username, password },
   });
 }
 

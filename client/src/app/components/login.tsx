@@ -5,7 +5,7 @@ import { BackgroundBeams } from "@/app/components/ui/background-beams";
 import { Button } from "@/app/components/ui/button";
 
 interface LoginProps {
-  onLogin: (credentials: { email: string; password: string }) => Promise<void>;
+  onLogin: (credentials: { username: string; password: string }) => Promise<void>;
   onSwitchToRegister: () => void;
   onForgotPassword: () => void;
   isSubmitting: boolean;
@@ -14,7 +14,7 @@ interface LoginProps {
 
 export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitting, error }: LoginProps) {
   const [formData, setFormData] = useState({
-    email: "",
+    username: "",
     password: "",
   });
 
@@ -76,14 +76,14 @@ export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitt
             <div>
               <label className="block text-sm font-medium text-neutral-300 mb-2">
                 <Mail className="inline w-4 h-4 mr-1" />
-                Email
+                Username
               </label>
               <input
-                type="email"
-                name="email"
-                value={formData.email}
+                type="text"
+                name="username"
+                value={formData.username}
                 onChange={handleChange}
-                placeholder="Enter your email"
+                placeholder="Enter your username"
                 className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 required
               />

@@ -63,9 +63,23 @@ const ARTICLES_PER_SOURCE = Number(process.env.ROBOTICS_ARTICLE_LIMIT || 5);
 
 const rssParser = new RSSParser();
 
+// Configure Helmet with a CSP and COOP/COEP settings suitable for
+// Google OAuth popups/iframes while keeping security headers in place.
+const cspDirectives = {
+    defaultSrc: ["'self'"],
+    scriptSrc: ["'self'", 'https://accounts.google.com', 'https://apis.google.com', "'unsafe-inline'"],
+    connectSrc: ["'self'", 'https://accounts.google.com', 'https://oauth2.googleapis.com', 'https://www.googleapis.com'],
+    imgSrc: ["'self'", 'data:', 'https://lh3.googleusercontent.com'],
+    styleSrc: ["'self'", 'https://fonts.googleapis.com', "'unsafe-inline'"],
+    fontSrc: ["'self'", 'https:', 'data:'],
+    frameAncestors: ["'self'", 'https://accounts.google.com']
+};
+
 app.use(helmet({
-    contentSecurityPolicy: IS_PRODUCTION ? undefined : false,
-    crossOriginEmbedderPolicy: IS_PRODUCTION,
+    contentSecurityPolicy: IS_PRODUCTION ? { directives: cspDirectives } : false,
+    // Allow popups and cross-origin postMessage flows used by Google Sign-In
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: IS_PRODUCTION ? { policy: 'same-origin-allow-popups' } : false,
     hsts: IS_PRODUCTION ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false
 }));
 
@@ -326,10 +340,10 @@ app.post(
     [
         body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters long.').trim(),
         body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.'),
-        body('full_name').optional().trim(),
+        body('full_name').notEmpty().withMessage('Full name is required.').trim(),
         body('roll_number').optional().trim(),
         body('phone').optional().trim(),
-        body('email').optional().isEmail().withMessage('Invalid email address.').normalizeEmail(),
+        body('email').notEmpty().withMessage('Email is required.').isEmail().withMessage('Invalid email address.').normalizeEmail(),
         body('department')
             .optional()
             .isIn(['mechanical', 'software', 'embedded'])

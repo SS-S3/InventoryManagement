@@ -37,11 +37,11 @@ export default function App() {
     setCurrentPage(user.role === "member" ? DEFAULT_MEMBER_PAGE : DEFAULT_ADMIN_PAGE);
   }, [user?.role]);
 
-  const handleLogin = async (credentials: { email: string; password: string }): Promise<void> => {
+  const handleLogin = async (credentials: { username: string; password: string }): Promise<void> => {
     try {
       setIsAuthenticating(true);
       setAuthError(null);
-      const loggedInUser = await login(credentials.email, credentials.password);
+      const loggedInUser = await login(credentials.username, credentials.password);
       setCurrentPage(loggedInUser.role === "member" ? DEFAULT_MEMBER_PAGE : DEFAULT_ADMIN_PAGE);
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Login failed");
