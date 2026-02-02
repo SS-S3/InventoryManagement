@@ -511,6 +511,22 @@ app.post(
     })
 );
 
+// Prevent accidental browser fetches to the redirect-based OAuth path.
+// If Google OAuth is configured for redirect (Passport) this route should be handled
+// by the Passport middleware. Otherwise respond with 410 Gone to avoid 5xx noise
+// when the frontend mistakenly performs a fetch to `/auth/google`.
+app.get('/auth/google', (req, res) => {
+    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CALLBACK_URL) {
+        // Passport redirect flow may be expected in some deployments; if passport
+        // middleware is not present we return 501 to indicate not implemented.
+        res.status(501).send('Google OAuth redirect flow not implemented on this server.');
+        return;
+    }
+
+    // Explicitly tell clients that the endpoint is disabled.
+    res.status(410).send('Google OAuth is disabled on this server.');
+});
+
 // --- Password Reset via Google OAuth ---
 
 // Verify Google ID token and issue a password reset token if email matches

@@ -516,6 +516,48 @@ export async function fetchCompetitionCalendar(token: string): Promise<Competiti
   return apiRequest<CompetitionRecord[]>("/reports/competitions/calendar", { token });
 }
 
+// Reports - chart data types
+export interface MonthlyToolActivity {
+  month: string;
+  issued: number;
+  returned: number;
+}
+
+export interface CategoryData {
+  name: string;
+  value: number;
+}
+
+export interface UtilizationData {
+  week: string;
+  rate: number;
+}
+
+export interface SummaryStats {
+  totalIssues: number;
+  averageDuration: number;
+  mostRequested: string;
+  mostRequestedCount?: number;
+  returnRate: number;
+  trendText?: string;
+}
+
+export async function fetchMonthlyToolActivity(token: string): Promise<MonthlyToolActivity[]> {
+  return apiRequest<MonthlyToolActivity[]>('/reports/tools/monthly-activity', { token });
+}
+
+export async function fetchCategoryData(token: string): Promise<CategoryData[]> {
+  return apiRequest<CategoryData[]>('/reports/tools/category-data', { token });
+}
+
+export async function fetchUtilizationData(token: string): Promise<UtilizationData[]> {
+  return apiRequest<UtilizationData[]>('/reports/tools/utilization', { token });
+}
+
+export async function fetchSummaryStats(token: string): Promise<SummaryStats> {
+  return apiRequest<SummaryStats>('/reports/tools/summary-stats', { token });
+}
+
 export async function fetchDepartmentSubmissionStats(token: string): Promise<DepartmentSubmissionStats[]> {
   return apiRequest<DepartmentSubmissionStats[]>("/statistics/submissions-by-department", { token });
 }

@@ -161,15 +161,24 @@ export function Login({ onLogin, onGoogleLogin, onSwitchToRegister, onForgotPass
           </div>
 
           <div className="flex justify-center">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={handleGoogleError}
-              theme="filled_black"
-              shape="pill"
-              size="large"
-              text="continue_with"
-              width={320}
-            />
+            {import.meta.env.VITE_ENABLE_GOOGLE_OAUTH === 'true' ? (
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                theme="filled_black"
+                shape="pill"
+                size="large"
+                text="continue_with"
+                width={320}
+              />
+            ) : (
+              <button
+                onClick={() => alert('Google login is temporarily disabled')}
+                className="px-4 py-2 bg-neutral-800 text-neutral-300 rounded-lg"
+              >
+                Sign in with Google (disabled)
+              </button>
+            )}
           </div>
 
           {/* Register Link */}

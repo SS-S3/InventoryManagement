@@ -1,7 +1,20 @@
 import { useEffect, useState, useMemo } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Calendar, Filter, Download, Loader, ChevronLeft, ChevronRight, Trophy } from 'lucide-react';
-import { fetchSubmissionsByDepartment, DepartmentStats, fetchCompetitions, CompetitionRecord } from "@/app/lib/api";
+import {
+  fetchSubmissionsByDepartment,
+  DepartmentStats,
+  fetchCompetitions,
+  CompetitionRecord,
+  fetchMonthlyToolActivity,
+  fetchCategoryData,
+  fetchUtilizationData,
+  fetchSummaryStats,
+  MonthlyToolActivity,
+  CategoryData,
+  UtilizationData,
+  SummaryStats,
+} from "@/app/lib/api";
 import { useAuth } from "@/app/providers/auth-provider";
 
 export function Reports() {
@@ -12,29 +25,11 @@ export function Reports() {
   const [competitionsLoading, setCompetitionsLoading] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
 
-  const monthlyData = [
-    { month: 'Jan', issued: 45, returned: 42 },
-    { month: 'Feb', issued: 52, returned: 48 },
-    { month: 'Mar', issued: 48, returned: 50 },
-    { month: 'Apr', issued: 61, returned: 55 },
-    { month: 'May', issued: 58, returned: 60 },
-    { month: 'Jun', issued: 64, returned: 62 },
-  ];
-
-  const categoryData = [
-    { name: 'Measurement', value: 35 },
-    { name: 'Signal Processing', value: 25 },
-    { name: 'Power', value: 20 },
-    { name: 'Digital', value: 12 },
-    { name: 'Assembly', value: 8 },
-  ];
-
-  const utilizationData = [
-    { week: 'Week 1', rate: 75 },
-    { week: 'Week 2', rate: 82 },
-    { week: 'Week 3', rate: 78 },
-    { week: 'Week 4', rate: 85 },
-  ];
+  const [monthlyData, setMonthlyData] = useState<MonthlyToolActivity[]>([]);
+  const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
+  const [utilizationData, setUtilizationData] = useState<UtilizationData[]>([]);
+  const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null);
+  const [chartsLoading, setChartsLoading] = useState(false);
 
   const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
 
@@ -43,6 +38,33 @@ export function Reports() {
       loadDepartmentStats();
       loadCompetitions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, user]);
+
+  useEffect(() => {
+    if (!(token && user?.role === 'admin')) return;
+    const loadCharts = async () => {
+      try {
+        setChartsLoading(true);
+        const [monthly, categories, utilization, summary] = await Promise.all([
+          fetchMonthlyToolActivity(token),
+          fetchCategoryData(token),
+          fetchUtilizationData(token),
+          fetchSummaryStats(token),
+        ]);
+
+        setMonthlyData(monthly || []);
+        setCategoryData(categories || []);
+        setUtilizationData(utilization || []);
+        setSummaryStats(summary || null);
+      } catch (err) {
+        console.error('Failed to load reports charts', err);
+      } finally {
+        setChartsLoading(false);
+      }
+    };
+
+    loadCharts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user]);
 
@@ -166,12 +188,10 @@ export function Reports() {
               Category
             </label>
             <select className="w-full px-4 py-2.5 border border-neutral-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option>All Categories</option>
-              <option>Measurement</option>
-              <option>Signal Processing</option>
-              <option>Power</option>
-              <option>Digital</option>
-              <option>Assembly</option>
+              <option value="">All Categories</option>
+              {categoryData.map((c) => (
+                <option key={c.name} value={c.name}>{c.name}</option>
+              ))}
             </select>
           </div>
           <div className="flex items-end">
@@ -485,22 +505,22 @@ export function Reports() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-6">
         <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 shadow-sm">
           <p className="text-sm text-neutral-500 mb-1">Total Issues</p>
-          <p className="text-3xl font-semibold text-white">328</p>
-          <p className="text-sm text-green-600 mt-2">+12% from last month</p>
+          <p className="text-3xl font-semibold text-white">{summaryStats ? summaryStats.totalIssues : '—'}</p>
+          <p className="text-sm text-green-600 mt-2">{summaryStats?.trendText || ''}</p>
         </div>
         <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 shadow-sm">
           <p className="text-sm text-neutral-500 mb-1">Average Duration</p>
-          <p className="text-3xl font-semibold text-white">4.5</p>
+          <p className="text-3xl font-semibold text-white">{summaryStats ? summaryStats.averageDuration : '—'}</p>
           <p className="text-sm text-neutral-400 mt-2">days per issue</p>
         </div>
         <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 shadow-sm">
           <p className="text-sm text-neutral-500 mb-1">Most Requested</p>
-          <p className="text-xl font-semibold text-white">Oscilloscope</p>
-          <p className="text-sm text-neutral-400 mt-2">45 times this month</p>
+          <p className="text-xl font-semibold text-white">{summaryStats ? summaryStats.mostRequested : '—'}</p>
+          <p className="text-sm text-neutral-400 mt-2">{summaryStats?.mostRequestedCount ? `${summaryStats.mostRequestedCount} times this month` : ''}</p>
         </div>
         <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 shadow-sm">
           <p className="text-sm text-neutral-500 mb-1">Return Rate</p>
-          <p className="text-3xl font-semibold text-white">96%</p>
+          <p className="text-3xl font-semibold text-white">{summaryStats && typeof summaryStats.returnRate === 'number' ? `${summaryStats.returnRate}%` : '—'}</p>
           <p className="text-sm text-green-600 mt-2">On-time returns</p>
         </div>
       </div>
