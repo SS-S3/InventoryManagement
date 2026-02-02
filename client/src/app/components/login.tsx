@@ -62,7 +62,7 @@ export function Login({ onLogin, onGoogleLogin, onSwitchToRegister, onForgotPass
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring" }}
-            className="inline-block mb-4 bg-neutral-800/60 backdrop-blur-xl rounded-2xl border border-neutral-700 p-4 shadow-2xl"
+            className="inline-block mb-4"
           >
             <img src="/sr.png" alt="Logo" className="w-40 h-40 object-contain" />
           </motion.div>
