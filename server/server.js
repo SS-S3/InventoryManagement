@@ -84,7 +84,7 @@ app.use(helmet({
 }));
 
 const corsOptions = {
-    origin: IS_PRODUCTION ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://yourdomain.com'] : true,
+    origin: IS_PRODUCTION ? process.env.ALLOWED_ORIGINS?.split(',') || ['https://sr-management.vercel.app'] : true,
     credentials: true,
     optionsSuccessStatus: 200
 };
@@ -106,6 +106,14 @@ app.use(limiter);
 
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/', (req, res) => {
+    res.status(200).json({
+        message: 'SR Management API is running',
+        version: '1.0.0',
+        documentation: '/docs'
+    });
 });
 
 const prepareStatement = async (sql) => {
@@ -457,8 +465,8 @@ app.post(
 
         console.log(`Password reset authorized via Google for ${user.email}`);
 
-        res.json({ 
-            valid: true, 
+        res.json({
+            valid: true,
             resetToken,
             message: 'Identity verified via Google. You can now reset your password.'
         });
@@ -557,7 +565,7 @@ app.post(
         for (const userData of users) {
             try {
                 const { full_name, roll_number, gender, phone, email, department, branch, password } = userData;
-                
+
                 if (!email || !full_name) {
                     results.failed.push({ email: email || 'unknown', error: 'Email and full_name are required' });
                     continue;
@@ -1386,13 +1394,13 @@ app.get(
 );
 
 app.post(
-        '/articles/refresh',
-        authenticateToken,
-        isAdmin,
-        asyncHandler(async (req, res) => {
-                await fetchAndStoreArticles();
-                res.json({ message: 'Article refresh triggered.' });
-        })
+    '/articles/refresh',
+    authenticateToken,
+    isAdmin,
+    asyncHandler(async (req, res) => {
+        await fetchAndStoreArticles();
+        res.json({ message: 'Article refresh triggered.' });
+    })
 );
 
 // 6. Projects & Allocations
@@ -1506,7 +1514,7 @@ app.post(
     ],
     asyncHandler(async (req, res) => {
         const { name, description, lead_id, start_date, end_date } = req.body;
-        
+
         const result = await dbRun(
             `INSERT INTO projects (name, description, lead_id, start_date, end_date, status)
              VALUES (?, ?, ?, ?, ?, 'planning')`,
@@ -1555,7 +1563,7 @@ app.put(
         params.push(projectId);
 
         await dbRun(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`, params);
-        
+
         const project = await dbGet('SELECT * FROM projects WHERE id = ?', [projectId]);
         res.json(project);
     })
@@ -1703,7 +1711,7 @@ app.get(
     authenticateToken,
     asyncHandler(async (req, res) => {
         const userId = req.user.id;
-        
+
         const projectApps = await dbAll(`
             SELECT pv.*, p.name as project_name, p.description as project_description, 'project' as type
             FROM project_volunteers pv
@@ -1739,9 +1747,9 @@ app.use((err, req, res, next) => {
         method: req.method,
         timestamp: new Date().toISOString()
     });
-    
+
     // Don't leak error details in production
-    res.status(err.status || 500).json({ 
+    res.status(err.status || 500).json({
         error: IS_PRODUCTION ? 'Internal server error' : err.message,
         errorId: errorId
     });
