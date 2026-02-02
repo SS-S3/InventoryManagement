@@ -308,10 +308,9 @@ export async function googleLogin(googleIdToken: string): Promise<AuthResponse> 
 }
 
 export async function registerRequest(payload: RegisterPayload): Promise<{ id: number; message: string }> {
-  return apiRequest<Item>("/items", {
+  return apiRequest<{ id: number; message: string }>("/register", {
     method: "POST",
     body: payload,
-    token,
   });
 }
 

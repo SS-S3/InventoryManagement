@@ -455,6 +455,62 @@ app.post(
     })
 );
 
+// --- Google Sign-In Authentication (existing users only) ---
+app.post(
+    '/auth/google',
+    [body('googleIdToken').notEmpty().withMessage('Google ID token is required'), validate],
+    asyncHandler(async (req, res) => {
+        const { googleIdToken } = req.body;
+
+        if (!googleClient) {
+            console.error('[AUTH_GOOGLE_ERROR] Google authentication is missing or misconfigured.');
+            res.status(503).json({ error: 'Google authentication is not configured.' });
+            return;
+        }
+
+        // Verify the Google ID token
+        let payload;
+        try {
+            const ticket = await googleClient.verifyIdToken({
+                idToken: googleIdToken,
+                audience: GOOGLE_CLIENT_ID
+            });
+            payload = ticket.getPayload();
+        } catch (err) {
+            console.error('Google token verification failed:', err.message);
+            res.status(400).json({ error: 'Invalid Google token.' });
+            return;
+        }
+
+        const googleEmail = payload.email;
+        if (!googleEmail || !payload.email_verified) {
+            res.status(400).json({ error: 'Google account email not verified.' });
+            return;
+        }
+
+        // Check if this email exists in our database (existing users only)
+        const user = await dbGet('SELECT * FROM users WHERE email = ?', [googleEmail.toLowerCase()]);
+
+        if (!user) {
+            // User must register first - Google login is only for existing users
+            res.status(400).json({ error: 'No account found with this email. Please register first.' });
+            return;
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: user.id, role: user.role, username: user.username, email: user.email },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        console.log(`[AUTH_GOOGLE_SUCCESS] User logged in via Google: ${user.email} (ID: ${user.id})`);
+        await logHistory(user.id, user.username, 'LOGIN_GOOGLE', 'User logged in via Google Sign-In');
+
+        res.json({ token, user: sanitizeUser(user) });
+    })
+);
+
 // --- Password Reset via Google OAuth ---
 
 // Verify Google ID token and issue a password reset token if email matches

@@ -93,6 +93,7 @@ export function Login({ onLogin, onGoogleLogin, onSwitchToRegister, onForgotPass
               <input
                 type="text"
                 name="username"
+                autoComplete="username"
                 value={formData.username}
                 onChange={handleChange}
                 placeholder="Enter your username"
@@ -110,6 +111,7 @@ export function Login({ onLogin, onGoogleLogin, onSwitchToRegister, onForgotPass
               <input
                 type="password"
                 name="password"
+                autoComplete="current-password"
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="Enter your password"
@@ -166,7 +168,7 @@ export function Login({ onLogin, onGoogleLogin, onSwitchToRegister, onForgotPass
               shape="pill"
               size="large"
               text="continue_with"
-              width="100%"
+              width={320}
             />
           </div>
 

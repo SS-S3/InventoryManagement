@@ -168,6 +168,7 @@ export function ForgotPassword({ onBack, apiBase }: ForgotPasswordProps) {
               </label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="At least 6 characters"
@@ -184,6 +185,7 @@ export function ForgotPassword({ onBack, apiBase }: ForgotPasswordProps) {
               </label>
               <input
                 type="password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat your password"
