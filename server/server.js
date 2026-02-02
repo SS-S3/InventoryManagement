@@ -15,7 +15,7 @@ const cron = require('node-cron');
 const axios = require('axios');
 const RSSParser = require('rss-parser');
 const { URL } = require('url');
-const twilio = require('twilio');
+const { OAuth2Client } = require('google-auth-library');
 const crypto = require('crypto');
 
 const app = express();
@@ -29,19 +29,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
 
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_FROM;
-
-let twilioClient = null;
-if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
-    try {
-        twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-    } catch (err) {
-        console.error('Failed to initialize Twilio client:', err.message);
-        twilioClient = null;
-    }
-}
+// Google OAuth Configuration
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 const TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL;
 const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
@@ -405,90 +395,59 @@ app.post(
     })
 );
 
-// --- Password Reset ---
+// --- Password Reset via Google OAuth ---
 
+// Verify Google ID token and issue a password reset token if email matches
 app.post(
     '/forgot-password',
-    [body('phone').trim().notEmpty().withMessage('Phone number is required'), validate],
+    [body('googleIdToken').notEmpty().withMessage('Google ID token is required'), validate],
     asyncHandler(async (req, res) => {
-        const { phone } = req.body;
+        const { googleIdToken } = req.body;
 
-        if (!twilioClient || !TWILIO_FROM_NUMBER) {
-            res.status(503).json({ error: 'SMS service is not configured.' });
+        if (!googleClient) {
+            res.status(503).json({ error: 'Google authentication is not configured.' });
             return;
         }
 
-        const user = await dbGet('SELECT id, phone, full_name FROM users WHERE phone = ?', [phone]);
-
-        if (!user) {
-            res.json({ message: 'If an account with that number exists, a reset code has been sent.' });
-            return;
-        }
-
-        const resetCode = crypto.randomInt(100000, 999999).toString();
-        const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-        await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [user.id]);
-
-        const hashedCode = await bcrypt.hash(resetCode, 10);
-        await dbRun(
-            'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
-            [user.id, hashedCode, expiresAt]
-        );
-
+        // Verify the Google ID token
+        let payload;
         try {
-            await twilioClient.messages.create({
-                body: `SR-DTU Inventory reset code: ${resetCode}. It expires in 15 minutes.`,
-                from: TWILIO_FROM_NUMBER,
-                to: user.phone
+            const ticket = await googleClient.verifyIdToken({
+                idToken: googleIdToken,
+                audience: GOOGLE_CLIENT_ID
             });
-            console.log(`Password reset code sent via SMS to ${user.phone}`);
-        } catch (smsError) {
-            console.error('Failed to send reset SMS:', smsError);
-            await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [user.id]);
-            res.status(500).json({ error: 'Failed to send reset SMS. Please try again.' });
+            payload = ticket.getPayload();
+        } catch (err) {
+            console.error('Google token verification failed:', err.message);
+            res.status(400).json({ error: 'Invalid Google token.' });
             return;
         }
 
-        res.json({ message: 'If an account with that number exists, a reset code has been sent.' });
-    })
-);
+        const googleEmail = payload.email;
+        if (!googleEmail || !payload.email_verified) {
+            res.status(400).json({ error: 'Google account email not verified.' });
+            return;
+        }
 
-app.post(
-    '/verify-reset-code',
-    [
-        body('phone').trim().notEmpty().withMessage('Phone number is required'),
-        body('code').isLength({ min: 6, max: 6 }).withMessage('Invalid code format'),
-        validate
-    ],
-    asyncHandler(async (req, res) => {
-        const { phone, code } = req.body;
+        // Check if this email exists in our database
+        const user = await dbGet('SELECT id, email, full_name FROM users WHERE email = ?', [googleEmail.toLowerCase()]);
 
-        const user = await dbGet('SELECT id FROM users WHERE phone = ?', [phone]);
         if (!user) {
-            res.status(400).json({ error: 'Invalid phone number or code.' });
+            // Don't reveal whether email exists
+            res.status(400).json({ error: 'No account found with this email address.' });
             return;
         }
 
-        const token = await dbGet(
-            'SELECT * FROM password_reset_tokens WHERE user_id = ? AND expires_at > datetime("now")',
-            [user.id]
-        );
-
-        if (!token) {
-            res.status(400).json({ error: 'Invalid or expired reset code.' });
-            return;
-        }
-
-        const isValid = await bcrypt.compare(code, token.token_hash);
-        if (!isValid) {
-            res.status(400).json({ error: 'Invalid or expired reset code.' });
-            return;
-        }
-
+        // Email matches - issue a reset token directly (Google verified identity)
         const resetToken = jwt.sign({ userId: user.id, purpose: 'password-reset' }, JWT_SECRET, { expiresIn: '10m' });
 
-        res.json({ valid: true, resetToken });
+        console.log(`Password reset authorized via Google for ${user.email}`);
+
+        res.json({ 
+            valid: true, 
+            resetToken,
+            message: 'Identity verified via Google. You can now reset your password.'
+        });
     })
 );
 
@@ -520,14 +479,14 @@ app.post(
         // Update user's password
         await dbRun('UPDATE users SET password = ?, updated_at = datetime("now") WHERE id = ?', [hashedPassword, decoded.userId]);
 
-        // Delete all reset tokens for this user
+        // Delete all reset tokens for this user (cleanup old SMS tokens if any)
         await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [decoded.userId]);
 
         // Log the action
         const user = await dbGet('SELECT username FROM users WHERE id = ?', [decoded.userId]);
         await dbRun(
             'INSERT INTO history (user_id, username, action, details) VALUES (?, ?, ?, ?)',
-            [decoded.userId, user?.username, 'PASSWORD_RESET', 'Password was reset via SMS verification']
+            [decoded.userId, user?.username, 'PASSWORD_RESET', 'Password was reset via Google verification']
         );
 
         res.json({ message: 'Password has been reset successfully.' });

@@ -141,14 +141,14 @@ export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitt
           </form>
 
           {/* Demo Credentials */}
-          <div className="mt-6 p-4 bg-blue-950/30 rounded-lg border border-blue-800/50">
+          {/* <div className="mt-6 p-4 bg-blue-950/30 rounded-lg border border-blue-800/50"> */}
             {/* <p className="text-sm font-medium text-blue-300 mb-2">Demo Credentials:</p> */}
             {/* <p className="text-xs text-blue-400">Admin: admin@example.com / admin123</p> */}
             {/* <p className="text-xs text-blue-400">Member: member@example.com / member123</p> */}
-          </div>
+          {/* </div> */}
 
           {/* Register Link */}
-          <div className="mt-6 text-center">
+          <div className="mt-6 p-4 bg-blue-950/90 rounded-lg border border-blue-600/90">
             <p className="text-sm text-neutral-400">
               Don't have an account?{' '}
               <button
