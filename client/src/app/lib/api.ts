@@ -213,6 +213,10 @@ export interface HistoryRecord {
   action: string;
   details?: string | null;
   timestamp: string;
+  full_name?: string | null;
+  roll_number?: string | null;
+  email?: string | null;
+  department?: string | null;
 }
 
 export interface DashboardSummary {
@@ -575,8 +579,27 @@ export async function fetchSubmissionsByDepartment(token: string): Promise<Depar
 }
 
 // History & Dashboard
-export async function fetchHistory(token: string): Promise<HistoryRecord[]> {
-  return apiRequest<HistoryRecord[]>("/history", { token });
+export interface HistoryResponse {
+  records: HistoryRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function fetchHistory(
+  token: string,
+  params?: { action?: string; user_id?: number; limit?: number; offset?: number }
+): Promise<HistoryResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.action) queryParams.set('action', params.action);
+  if (params?.user_id !== undefined) queryParams.set('user_id', params.user_id.toString());
+  if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
+  if (params?.offset !== undefined) queryParams.set('offset', params.offset.toString());
+  
+  const queryString = queryParams.toString();
+  const path = queryString ? `/history?${queryString}` : '/history';
+  
+  return apiRequest<HistoryResponse>(path, { token });
 }
 
 export async function fetchDashboardSummary(token: string): Promise<DashboardSummary> {

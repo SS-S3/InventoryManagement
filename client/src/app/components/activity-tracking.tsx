@@ -1,12 +1,14 @@
-import { useState } from 'react';
-import { History, Search, Filter, Download, Calendar, User, Package, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { History, Search, Filter, Download, Calendar, User, Package, ArrowUpRight, ArrowDownLeft, Loader } from 'lucide-react';
+import { useAuthStore } from '@/app/stores/auth-store';
+import { fetchHistory, HistoryRecord } from '@/app/lib/api';
 
 interface Activity {
   id: string;
   timestamp: string;
   memberName: string;
   memberId: string;
-  action: 'issued' | 'returned' | 'requested';
+  action: 'issued' | 'returned' | 'requested' | 'other';
   toolName: string;
   quantity: number;
   competition?: string;
@@ -15,131 +17,106 @@ interface Activity {
 }
 
 export function ActivityTracking() {
+  const { token } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterAction, setFilterAction] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
 
-  const [activities] = useState<Activity[]>([
-    {
-      id: '1',
-      timestamp: '2026-01-19 10:30 AM',
-      memberName: 'John Doe',
-      memberId: 'LAB-2024-001',
-      action: 'issued',
-      toolName: 'Oscilloscope Model X200',
-      quantity: 2,
-      competition: 'Robotics Innovation Challenge 2026',
-      purpose: 'Circuit testing for robot controller',
-      status: 'completed',
-    },
-    {
-      id: '2',
-      timestamp: '2026-01-19 09:15 AM',
-      memberName: 'Sarah Smith',
-      memberId: 'LAB-2024-015',
-      action: 'returned',
-      toolName: 'Multimeter DMM-150',
-      quantity: 1,
-      competition: 'Circuit Design Workshop',
-      purpose: 'Voltage measurement completed',
-      status: 'completed',
-    },
-    {
-      id: '3',
-      timestamp: '2026-01-18 02:45 PM',
-      memberName: 'Mike Johnson',
-      memberId: 'LAB-2024-023',
-      action: 'issued',
-      toolName: 'Signal Generator SG-100',
-      quantity: 1,
-      competition: 'Circuit Design Workshop',
-      purpose: 'Signal analysis for frequency response test',
-      status: 'pending',
-    },
-    {
-      id: '4',
-      timestamp: '2026-01-18 11:20 AM',
-      memberName: 'Emily Brown',
-      memberId: 'LAB-2024-008',
-      action: 'issued',
-      toolName: 'Power Supply PS-5000',
-      quantity: 1,
-      purpose: 'Independent research project - power electronics',
-      status: 'overdue',
-    },
-    {
-      id: '5',
-      timestamp: '2026-01-17 04:30 PM',
-      memberName: 'David Lee',
-      memberId: 'LAB-2024-042',
-      action: 'returned',
-      toolName: 'Function Generator FG-200',
-      quantity: 1,
-      competition: 'Circuit Design Workshop',
-      purpose: 'Waveform generation test completed',
-      status: 'completed',
-    },
-    {
-      id: '6',
-      timestamp: '2026-01-17 01:15 PM',
-      memberName: 'Amanda Wilson',
-      memberId: 'LAB-2024-035',
-      action: 'issued',
-      toolName: 'Soldering Station SS-75',
-      quantity: 3,
-      competition: 'Robotics Innovation Challenge 2026',
-      purpose: 'PCB assembly for robot components',
-      status: 'pending',
-    },
-    {
-      id: '7',
-      timestamp: '2026-01-16 03:00 PM',
-      memberName: 'Robert Garcia',
-      memberId: 'LAB-2024-019',
-      action: 'returned',
-      toolName: 'Logic Analyzer LA-100',
-      quantity: 1,
-      purpose: 'Digital circuit debugging - Senior project',
-      status: 'completed',
-    },
-    {
-      id: '8',
-      timestamp: '2026-01-16 10:45 AM',
-      memberName: 'Lisa Martinez',
-      memberId: 'LAB-2024-027',
-      action: 'issued',
-      toolName: 'Oscilloscope Model X200',
-      quantity: 1,
-      competition: 'Robotics Innovation Challenge 2026',
-      purpose: 'Testing motor control signals',
-      status: 'pending',
-    },
-    {
-      id: '9',
-      timestamp: '2026-01-15 02:20 PM',
-      memberName: 'James Taylor',
-      memberId: 'LAB-2024-011',
-      action: 'returned',
-      toolName: 'Multimeter DMM-150',
-      quantity: 2,
-      competition: 'Circuit Design Workshop',
-      purpose: 'Workshop completed - returned on time',
-      status: 'completed',
-    },
-    {
-      id: '10',
-      timestamp: '2026-01-15 09:30 AM',
-      memberName: 'Jennifer Anderson',
-      memberId: 'LAB-2024-004',
-      action: 'issued',
-      toolName: 'Power Supply PS-5000',
-      quantity: 1,
-      competition: 'Circuit Design Workshop',
-      purpose: 'Power circuit testing and validation',
-      status: 'completed',
-    },
-  ]);
+  useEffect(() => {
+    if (token) {
+      fetchHistoryData();
+    }
+  }, [token]);
+
+  const fetchHistoryData = async () => {
+    if (!token) return;
+    
+    try {
+      setIsLoading(true);
+      const response = await fetchHistory(token, { limit: 500 });
+      
+      setHistoryRecords(response.records || []);
+      
+      // Transform history records into activity format
+      const transformedActivities = transformHistoryToActivities(response.records || []);
+      setActivities(transformedActivities);
+    } catch (error) {
+      console.error('Failed to fetch history:', error);
+      setActivities([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const transformHistoryToActivities = (records: HistoryRecord[]): Activity[] => {
+    return records.map((record) => {
+      // Parse action type and details
+      const actionType = record.action?.toLowerCase() || 'other';
+      let parsedAction: 'issued' | 'returned' | 'requested' | 'other' = 'other';
+      let toolName = 'Unknown';
+      let quantity = 1;
+      let purpose = record.details || 'No details available';
+      
+      // Determine action type based on history action
+      if (actionType.includes('issue') || actionType.includes('borrow')) {
+        parsedAction = 'issued';
+      } else if (actionType.includes('return')) {
+        parsedAction = 'returned';
+      } else if (actionType.includes('request')) {
+        parsedAction = 'requested';
+      }
+      
+      // Try to extract tool name and quantity from details
+      if (record.details) {
+        // Look for patterns like "item 5" or "request 10"
+        const itemMatch = record.details.match(/(?:item|tool|request|borrowing)\s+(\d+)/i);
+        if (itemMatch) {
+          toolName = `Item #${itemMatch[1]}`;
+        }
+        
+        // Look for quantity patterns
+        const qtyMatch = record.details.match(/(?:qty|quantity)\s+(\d+)/i);
+        if (qtyMatch) {
+          quantity = parseInt(qtyMatch[1], 10);
+        }
+      }
+      
+      // Determine status based on action and timestamp
+      const timestamp = new Date(record.timestamp);
+      const now = new Date();
+      const daysDiff = (now.getTime() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
+      
+      let status: 'completed' | 'pending' | 'overdue' = 'completed';
+      if (parsedAction === 'issued' && daysDiff > 7) {
+        status = 'overdue';
+      } else if (parsedAction === 'requested') {
+        status = 'pending';
+      }
+      
+      return {
+        id: record.id.toString(),
+        timestamp: new Date(record.timestamp).toLocaleString('en-US', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        }),
+        memberName: record.full_name || record.username || 'Unknown User',
+        memberId: record.roll_number || record.email?.split('@')[0] || `USER-${record.user_id || 'N/A'}`,
+        action: parsedAction,
+        toolName,
+        quantity,
+        purpose,
+        status
+      };
+    });
+  };
 
   const getActionIcon = (action: string) => {
     switch (action) {
@@ -252,7 +229,8 @@ export function ActivityTracking() {
         </div>
         <button
           onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          disabled={isLoading}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download className="w-5 h-5" />
           Export Data
@@ -360,7 +338,12 @@ export function ActivityTracking() {
         </div>
 
         <div className="divide-y divide-neutral-800">
-          {filteredActivities.length > 0 ? (
+          {isLoading ? (
+            <div className="p-12 text-center">
+              <Loader className="w-12 h-12 text-blue-500 mx-auto mb-3 animate-spin" />
+              <p className="text-neutral-500">Loading activity history...</p>
+            </div>
+          ) : filteredActivities.length > 0 ? (
             filteredActivities.map((activity) => (
               <div key={activity.id} className="p-6 hover:bg-neutral-800 transition-colors">
                 <div className="flex items-start gap-4">

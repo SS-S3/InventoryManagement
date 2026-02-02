@@ -1135,6 +1135,71 @@ app.put(
     })
 );
 
+// --- Activity History ---
+app.get(
+    '/history',
+    [
+        authenticateToken,
+        query('action').optional().isString(),
+        query('user_id').optional().isInt(),
+        query('limit').optional().isInt({ min: 1, max: 1000 }),
+        query('offset').optional().isInt({ min: 0 }),
+        validate
+    ],
+    asyncHandler(async (req, res) => {
+        const filters = [];
+        const params = [];
+
+        // Filter by action type
+        if (req.query.action) {
+            filters.push('h.action = ?');
+            params.push(req.query.action);
+        }
+
+        // Filter by user (admin can see all, members only their own)
+        if (req.user.role !== 'admin') {
+            filters.push('h.user_id = ?');
+            params.push(req.user.id);
+        } else if (req.query.user_id) {
+            filters.push('h.user_id = ?');
+            params.push(Number(req.query.user_id));
+        }
+
+        const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+        const limit = Number(req.query.limit) || 100;
+        const offset = Number(req.query.offset) || 0;
+
+        const sql = `
+            SELECT h.*, u.full_name, u.roll_number, u.email, u.department
+            FROM history h
+            LEFT JOIN users u ON h.user_id = u.id
+            ${whereClause}
+            ORDER BY h.timestamp DESC
+            LIMIT ? OFFSET ?
+        `;
+
+        params.push(limit, offset);
+
+        const history = await dbAll(sql, params);
+        
+        // Get total count for pagination
+        const countSql = `
+            SELECT COUNT(*) as total
+            FROM history h
+            ${whereClause}
+        `;
+        const countParams = params.slice(0, -2); // Remove limit and offset
+        const countResult = await dbGet(countSql, countParams);
+        
+        res.json({
+            records: history,
+            total: countResult?.total || 0,
+            limit,
+            offset
+        });
+    })
+);
+
 // --- Assignments & Submissions ---
 app.post(
     '/assignments',
