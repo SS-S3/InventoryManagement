@@ -137,25 +137,59 @@ const normalizeRow = (row) => {
     return normalized;
 };
 
-const dbRun = async (sql, params = []) => {
-    const stmt = await prepareStatement(sql);
-    const result = await stmt.run(params);
-    return {
-        lastID: toNumber(result.lastInsertRowid),
-        changes: toNumber(result.changes) || 0
-    };
+const dbRun = async (sql, args = []) => {
+    try {
+        const client = await getTursoClient();
+        if (client.execute) {
+            const result = await client.execute({ sql, args });
+            return {
+                lastID: toNumber(result.lastInsertRowid),
+                changes: toNumber(result.changes) || 0
+            };
+        }
+        const stmt = await client.prepare(sql);
+        const result = await stmt.run(args);
+        return {
+            lastID: toNumber(result.lastInsertRowid),
+            changes: toNumber(result.changes) || 0
+        };
+    } catch (error) {
+        console.error('Database Error (Run):', error);
+        throw error;
+    }
 };
 
-const dbGet = async (sql, params = []) => {
-    const stmt = await prepareStatement(sql);
-    const rows = await stmt.all(params);
-    return rows.length > 0 ? normalizeRow(rows[0]) : null;
+const dbGet = async (sql, args = []) => {
+    try {
+        const client = await getTursoClient();
+        // Check if execute exists (it might not)
+        if (client.execute) {
+            const result = await client.execute({ sql, args });
+            return result.rows[0];
+        }
+        // Fallback to prepare pattern
+        const stmt = await client.prepare(sql);
+        const result = await stmt.get(args);
+        return result;
+    } catch (error) {
+        console.error('Database Error (Get):', error);
+        return null;
+    }
 };
 
-const dbAll = async (sql, params = []) => {
-    const stmt = await prepareStatement(sql);
-    const rows = await stmt.all(params);
-    return rows.map(normalizeRow);
+const dbAll = async (sql, args = []) => {
+    try {
+        const client = await getTursoClient();
+        if (client.execute) {
+            const result = await client.execute({ sql, args });
+            return result.rows;
+        }
+        const stmt = await client.prepare(sql);
+        return await stmt.all(args);
+    } catch (error) {
+        console.error('Database Error (All):', error);
+        return [];
+    }
 };
 
 const withTransaction = async (callback) => {
@@ -395,16 +429,20 @@ app.post(
     [body('email').notEmpty(), body('password').notEmpty(), validate],
     asyncHandler(async (req, res) => {
         const { email, password } = req.body;
+        console.log(`[LOGIN_ATTEMPT] Email/Username: ${email}`);
+
         // Support login by email or username for backwards compatibility
         const user = await dbGet('SELECT * FROM users WHERE email = ? OR username = ?', [email, email]);
 
         if (!user) {
+            console.warn(`[LOGIN_LEAL] User not found: ${email}`);
             res.status(400).json({ error: 'Invalid credentials.' });
             return;
         }
 
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
+            console.warn(`[LOGIN_FAIL] Invalid password for user: ${user.username} (ID: ${user.id})`);
             res.status(400).json({ error: 'Invalid credentials.' });
             return;
         }
@@ -427,6 +465,7 @@ app.post(
         const { googleIdToken } = req.body;
 
         if (!googleClient) {
+            console.error('[FORGOT_PASSWORD_ERROR] Google authentication is missing or misconfigured.');
             res.status(503).json({ error: 'Google authentication is not configured.' });
             return;
         }

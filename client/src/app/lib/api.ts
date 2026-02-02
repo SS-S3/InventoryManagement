@@ -300,10 +300,18 @@ export async function loginRequest(username: string, password: string): Promise<
   });
 }
 
+export async function googleLogin(googleIdToken: string): Promise<AuthResponse> {
+  return apiRequest<AuthResponse>("/auth/google", {
+    method: "POST",
+    body: { googleIdToken },
+  });
+}
+
 export async function registerRequest(payload: RegisterPayload): Promise<{ id: number; message: string }> {
-  return apiRequest<{ id: number; message: string }>("/register", {
+  return apiRequest<Item>("/items", {
     method: "POST",
     body: payload,
+    token,
   });
 }
 

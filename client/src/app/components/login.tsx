@@ -3,16 +3,18 @@ import { Package, Mail, Lock, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { BackgroundBeams } from "@/app/components/ui/background-beams";
 import { Button } from "@/app/components/ui/button";
+import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 
 interface LoginProps {
   onLogin: (credentials: { username: string; password: string }) => Promise<void>;
+  onGoogleLogin: (token: string) => Promise<void>;
   onSwitchToRegister: () => void;
   onForgotPassword: () => void;
   isSubmitting: boolean;
   error?: string | null;
 }
 
-export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitting, error }: LoginProps) {
+export function Login({ onLogin, onGoogleLogin, onSwitchToRegister, onForgotPassword, isSubmitting, error }: LoginProps) {
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -21,6 +23,16 @@ export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitt
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await onLogin(formData);
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (credentialResponse.credential) {
+      await onGoogleLogin(credentialResponse.credential);
+    }
+  };
+
+  const handleGoogleError = () => {
+    console.error("Google Login Failed");
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,11 +45,11 @@ export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitt
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
       <BackgroundBeams />
-      
+
       {/* Gradient orbs */}
       <div className="absolute top-20 right-20 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl" />
       <div className="absolute bottom-20 left-20 w-96 h-96 bg-cyan-600/20 rounded-full blur-3xl" />
-      
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -55,7 +67,7 @@ export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitt
             <img src="/sr.png" alt="Logo" className="w-40 h-40 object-contain" />
           </motion.div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-neutral-400 bg-clip-text text-transparent">
-            SR-DTU 
+            SR-DTU
           </h1>
           <p className="text-neutral-400 mt-2 flex items-center justify-center gap-2">
             <Sparkles className="w-4 h-4" />
@@ -140,12 +152,23 @@ export function Login({ onLogin, onSwitchToRegister, onForgotPassword, isSubmitt
             </Button>
           </form>
 
-          {/* Demo Credentials */}
-          {/* <div className="mt-6 p-4 bg-blue-950/30 rounded-lg border border-blue-800/50"> */}
-            {/* <p className="text-sm font-medium text-blue-300 mb-2">Demo Credentials:</p> */}
-            {/* <p className="text-xs text-blue-400">Admin: admin@example.com / admin123</p> */}
-            {/* <p className="text-xs text-blue-400">Member: member@example.com / member123</p> */}
-          {/* </div> */}
+          <div className="my-6 flex items-center">
+            <div className="flex-grow border-t border-neutral-700"></div>
+            <span className="mx-4 text-neutral-500 text-sm">OR</span>
+            <div className="flex-grow border-t border-neutral-700"></div>
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              theme="filled_black"
+              shape="pill"
+              size="large"
+              text="continue_with"
+              width="100%"
+            />
+          </div>
 
           {/* Register Link */}
           <div className="mt-6 p-4 bg-blue-950/90 rounded-lg border border-blue-600/90">

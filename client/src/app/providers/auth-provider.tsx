@@ -27,17 +27,18 @@ export function useAuth() {
     register,
     logout,
     clearError,
+    googleLogin, // Added googleLogin from the store
   } = useAuthStore();
-
   return {
     user,
-    token,
+    token, // token is not part of AuthContextType, but is returned by useAuthStore
     isLoading: !isHydrated,
-    isProcessing,
-    error,
+    isProcessing, // isProcessing is not part of AuthContextType, but is returned by useAuthStore
+    error, // error is not part of AuthContextType, but is returned by useAuthStore
     login,
     register: (payload: RegisterPayload) => register(payload),
     logout,
-    clearError,
+    clearError, // clearError is not part of AuthContextType, but is returned by useAuthStore
+    googleLogin,
   };
 }

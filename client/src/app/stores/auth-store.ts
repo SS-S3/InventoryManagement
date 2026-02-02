@@ -6,6 +6,7 @@ import {
   fetchProfile,
   loginRequest,
   registerRequest,
+  googleLogin,
 } from "@/app/lib/api";
 
 const TOKEN_STORAGE_KEY = "inventory_token";
@@ -21,6 +22,7 @@ interface AuthState {
   error: AuthError;
   hydrate: () => Promise<void>;
   login: (username: string, password: string) => Promise<AuthUserResponse>;
+  googleLogin: (token: string) => Promise<AuthUserResponse>;
   register: (payload: RegisterPayload) => Promise<AuthUserResponse>;
   logout: () => void;
   setUser: (user: AuthUserResponse | null) => void;
@@ -96,6 +98,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return response.user;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to login";
+      set({ isProcessing: false, error: message });
+      throw new Error(message);
+    }
+  },
+  googleLogin: async (idToken) => {
+    set({ isProcessing: true, error: null });
+
+    try {
+      const response: AuthResponse = await googleLogin(idToken);
+      persistSession(response.token, response.user);
+      set({ user: response.user, token: response.token, isProcessing: false, error: null, isHydrated: true });
+      return response.user;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to login with Google";
       set({ isProcessing: false, error: message });
       throw new Error(message);
     }

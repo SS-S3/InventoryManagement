@@ -26,7 +26,7 @@ const DEFAULT_MEMBER_PAGE = "member-dashboard";
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 
 export default function App() {
-  const { user, login, register, logout, isLoading } = useAuth();
+  const { user, login, googleLogin, register, logout, isLoading } = useAuth();
   const [authView, setAuthView] = useState<"login" | "register" | "forgot-password">("login");
   const [currentPage, setCurrentPage] = useState<string>(DEFAULT_ADMIN_PAGE);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -144,10 +144,13 @@ export default function App() {
         />
       );
     }
-    
+
     return authView === "login" ? (
       <Login
         onLogin={handleLogin}
+        onGoogleLogin={async (token) => {
+          await googleLogin(token);
+        }}
         onSwitchToRegister={() => setAuthView("register")}
         onForgotPassword={() => setAuthView("forgot-password")}
         isSubmitting={isAuthenticating}
