@@ -12,6 +12,10 @@ import {
   gradeSubmission as apiGradeSubmission,
   submitAssignment as apiSubmitAssignment,
 } from "@/app/lib/api";
+import { getISTTimestamp } from "@/app/lib/date";
+
+// Cache configuration: data is considered stale after 60 seconds
+const STALE_TIME_MS = 60 * 1000;
 
 interface AssignmentsState {
   assignments: AssignmentRecord[];
@@ -20,7 +24,8 @@ interface AssignmentsState {
   submissionsByAssignment: Record<number, SubmissionRecord[]>;
   assignmentStats: Record<number, AssignmentStats>;
   userSubmissions: SubmissionRecord[];
-  fetchAssignments: (token: string) => Promise<void>;
+  lastFetched: number | null;
+  fetchAssignments: (token: string, forceRefresh?: boolean) => Promise<void>;
   createAssignment: (
     token: string,
     payload: { title: string; description?: string; department: AssignmentRecord["department"]; due_date?: string; resource_url?: string },
@@ -32,6 +37,7 @@ interface AssignmentsState {
   submitAssignment: (token: string, assignmentId: number, githubLink: string) => Promise<void>;
   gradeSubmission: (token: string, submissionId: number, status: "pass" | "fail", feedback?: string) => Promise<void>;
   clearError: () => void;
+  invalidateCache: () => void;
 }
 
 export const useAssignmentsStore = create<AssignmentsState>((set, get) => ({
@@ -41,11 +47,18 @@ export const useAssignmentsStore = create<AssignmentsState>((set, get) => ({
   submissionsByAssignment: {},
   assignmentStats: {},
   userSubmissions: [],
-  fetchAssignments: async (token) => {
+  lastFetched: null,
+  fetchAssignments: async (token, forceRefresh = false) => {
+    // Skip fetch if data is fresh (within stale time)
+    const { lastFetched, isLoading } = get();
+    if (!forceRefresh && lastFetched && Date.now() - lastFetched < STALE_TIME_MS && !isLoading) {
+      return;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       const assignments = await apiFetchAssignments(token);
-      set({ assignments, isLoading: false });
+      set({ assignments, isLoading: false, lastFetched: Date.now() });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load assignments";
       set({ isLoading: false, error: message });
@@ -130,7 +143,7 @@ export const useAssignmentsStore = create<AssignmentsState>((set, get) => ({
           Number(assignmentId),
           submissions.map((submission) =>
             submission.id === submissionId
-              ? { ...submission, status, feedback: feedback ?? submission.feedback, graded_at: new Date().toISOString() }
+              ? { ...submission, status, feedback: feedback ?? submission.feedback, graded_at: getISTTimestamp() }
               : submission,
           ),
         ]),
@@ -157,4 +170,5 @@ export const useAssignmentsStore = create<AssignmentsState>((set, get) => ({
     }
   },
   clearError: () => set({ error: null }),
+  invalidateCache: () => set({ lastFetched: null }),
 }));

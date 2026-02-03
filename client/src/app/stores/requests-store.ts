@@ -7,15 +7,20 @@ import {
   cancelRequest as apiCancelRequest,
   fetchRequests as apiFetchRequests,
 } from "@/app/lib/api";
+import { getISTTimestamp } from "@/app/lib/date";
 
 type RequestStatusFilter = RequestRecord["status"] | "all" | null;
+
+// Cache configuration: data is considered stale after 60 seconds
+const STALE_TIME_MS = 60 * 1000;
 
 interface RequestsState {
   records: RequestRecord[];
   isLoading: boolean;
   error: string | null;
   statusFilter: RequestStatusFilter;
-  fetchRequests: (token: string, status?: RequestRecord["status"]) => Promise<void>;
+  lastFetched: number | null;
+  fetchRequests: (token: string, status?: RequestRecord["status"], forceRefresh?: boolean) => Promise<void>;
   setStatusFilter: (status: RequestStatusFilter) => void;
   createRequest: (
     token: string,
@@ -25,6 +30,7 @@ interface RequestsState {
   rejectRequest: (token: string, id: number, reason?: string) => Promise<void>;
   cancelRequest: (token: string, id: number, reason?: string) => Promise<void>;
   clearError: () => void;
+  invalidateCache: () => void;
 }
 
 export const useRequestsStore = create<RequestsState>((set, get) => ({
@@ -32,11 +38,18 @@ export const useRequestsStore = create<RequestsState>((set, get) => ({
   isLoading: false,
   error: null,
   statusFilter: "all",
-  fetchRequests: async (token, status) => {
+  lastFetched: null,
+  fetchRequests: async (token, status, forceRefresh = false) => {
+    // Skip fetch if data is fresh (within stale time)
+    const { lastFetched, isLoading } = get();
+    if (!forceRefresh && lastFetched && Date.now() - lastFetched < STALE_TIME_MS && !isLoading) {
+      return;
+    }
+    
     set({ isLoading: true, error: null });
     try {
       const records = await apiFetchRequests(token, status);
-      set({ records, isLoading: false });
+      set({ records, isLoading: false, lastFetched: Date.now() });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load requests";
       set({ isLoading: false, error: message });
@@ -48,7 +61,7 @@ export const useRequestsStore = create<RequestsState>((set, get) => ({
     set({ error: null });
     try {
       const record = await apiCreateRequest(token, payload);
-      set({ records: [record, ...get().records] });
+      set({ records: [record, ...get().records], lastFetched: Date.now() });
       return record;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create request";
@@ -63,7 +76,7 @@ export const useRequestsStore = create<RequestsState>((set, get) => ({
       set({
         records: get().records.map((record) =>
           record.id === id
-            ? { ...record, status: "approved", resolved_at: new Date().toISOString(), cancellation_reason: null }
+            ? { ...record, status: "approved", resolved_at: getISTTimestamp(), cancellation_reason: null }
             : record,
         ),
       });
@@ -83,7 +96,7 @@ export const useRequestsStore = create<RequestsState>((set, get) => ({
             ? {
                 ...record,
                 status: "rejected",
-                resolved_at: new Date().toISOString(),
+                resolved_at: getISTTimestamp(),
                 cancellation_reason: reason ?? null,
               }
             : record,
@@ -105,7 +118,7 @@ export const useRequestsStore = create<RequestsState>((set, get) => ({
             ? {
                 ...record,
                 status: "cancelled",
-                resolved_at: new Date().toISOString(),
+                resolved_at: getISTTimestamp(),
                 cancellation_reason: reason ?? null,
               }
             : record,
@@ -118,4 +131,5 @@ export const useRequestsStore = create<RequestsState>((set, get) => ({
     }
   },
   clearError: () => set({ error: null }),
+  invalidateCache: () => set({ lastFetched: null }),
 }));

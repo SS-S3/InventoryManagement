@@ -349,6 +349,22 @@ const extractHost = (value) => {
     }
 };
 
+const formatToIST = (dateInput) => {
+    try {
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return getISTISOString();
+        const year = d.toLocaleString('en-US', { timeZone: TIMEZONE, year: 'numeric' });
+        const month = d.toLocaleString('en-US', { timeZone: TIMEZONE, month: '2-digit' });
+        const day = d.toLocaleString('en-US', { timeZone: TIMEZONE, day: '2-digit' });
+        const hour = d.toLocaleString('en-US', { timeZone: TIMEZONE, hour: '2-digit', hour12: false });
+        const minute = d.toLocaleString('en-US', { timeZone: TIMEZONE, minute: '2-digit' });
+        const second = d.toLocaleString('en-US', { timeZone: TIMEZONE, second: '2-digit' });
+        return `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
+    } catch (e) {
+        return getISTISOString();
+    }
+};
+
 const normalizeArticleList = (entries, fallbackSource) => {
     if (!Array.isArray(entries)) return [];
     return entries
@@ -361,7 +377,7 @@ const normalizeArticleList = (entries, fallbackSource) => {
                 title: title.trim(),
                 url: link,
                 source: entry?.source || extractHost(link) || fallbackSource,
-                published_at: published ? getISTISOString() : getISTISOString()
+                published_at: published ? formatToIST(published) : null
             };
         })
         .filter(Boolean)
@@ -371,18 +387,30 @@ const normalizeArticleList = (entries, fallbackSource) => {
 const fetchArticlesFromSource = async (sourceUrl) => {
     const host = extractHost(sourceUrl);
 
+    // First, try parsing as an RSS/Atom feed using rss-parser (handles redirects)
     try {
-        if (sourceUrl.includes('medium.com/feed') || sourceUrl.endsWith('.rss') || sourceUrl.endsWith('.xml')) {
-            const feed = await rssParser.parseURL(sourceUrl);
-            return normalizeArticleList(feed.items || [], host);
-        }
+        const feed = await rssParser.parseURL(sourceUrl);
+        return normalizeArticleList(feed.items || [], host);
+    } catch (rssErr) {
+        // Fallback: fetch resource and try to parse string or handle JSON responses
+        try {
+            const response = await axios.get(sourceUrl, { timeout: 10000, maxRedirects: 5, headers: { 'User-Agent': 'Node/RSSFetcher' } });
+            const contentType = (response.headers['content-type'] || '').toLowerCase();
+            if (typeof response.data === 'string' && (contentType.includes('xml') || response.data.trim().startsWith('<'))) {
+                try {
+                    const feed = await rssParser.parseString(response.data);
+                    return normalizeArticleList(feed.items || [], host);
+                } catch (parseErr) {
+                    console.error(`RSS parseString failed for ${sourceUrl}:`, parseErr.message);
+                }
+            }
 
-        const response = await axios.get(sourceUrl, { timeout: 10000 });
-        const data = Array.isArray(response.data) ? response.data : response.data?.articles;
-        return normalizeArticleList(data || [], host);
-    } catch (err) {
-        console.error(`Failed to fetch articles from ${sourceUrl}:`, err.message);
-        return [];
+            const data = Array.isArray(response.data) ? response.data : response.data?.articles;
+            return normalizeArticleList(data || [], host);
+        } catch (httpErr) {
+            console.error(`Failed to fetch articles from ${sourceUrl}:`, httpErr.message);
+            return [];
+        }
     }
 };
 
@@ -394,11 +422,17 @@ const fetchAndStoreArticles = async () => {
 
     const istDate = new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
     const today = istDate.toISOString().split('T')[0];
-    const aggregated = [];
 
-    for (const source of ARTICLE_SOURCES) {
-        const articles = await fetchArticlesFromSource(source);
-        aggregated.push(...articles);
+    // Parallel fetch from all sources for faster execution
+    const fetchResults = await Promise.allSettled(
+        ARTICLE_SOURCES.map(source => fetchArticlesFromSource(source))
+    );
+    
+    const aggregated = [];
+    for (const result of fetchResults) {
+        if (result.status === 'fulfilled') {
+            aggregated.push(...result.value);
+        }
     }
 
     const deduped = [];
@@ -432,13 +466,43 @@ const fetchAndStoreArticles = async () => {
 
 fetchAndStoreArticles().catch((err) => console.error('Initial article fetch failed:', err.message));
 
-cron.schedule('0 15 * * *', () => {
+cron.schedule('0 0,12 * * *', () => {
     fetchAndStoreArticles().catch((err) => console.error('Scheduled article fetch failed:', err.message));
+}, {
+    timezone: 'Asia/Kolkata'
+});
+
+// ===========================================
+// Auth Rate Limiting - Brute-force protection
+// ===========================================
+const authRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // 10 attempts per IP per 15 minutes
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
+    keyGenerator: (req) => {
+        // Use X-Forwarded-For for Vercel/proxy environments
+        return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+    },
+    handler: (req, res) => {
+        const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+        console.warn(`[RATE_LIMIT] Auth rate limit exceeded for IP: ${ip}, path: ${req.path}, timestamp: ${getISTISOString()}`);
+        res.status(429).json({ error: 'Too many login attempts. Please try again after 15 minutes.' });
+    }
+});
+
+// Helper to get client info for logging
+const getClientInfo = (req) => ({
+    ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown',
+    userAgent: req.headers['user-agent'] || 'unknown',
+    timestamp: getISTISOString()
 });
 
 // --- Authentication Routes ---
 app.post(
     '/register',
+    authRateLimiter,
     [
         body('username').isLength({ min: 3 }).withMessage('Username must be at least 3 characters long.').trim(),
         body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.'),
@@ -454,6 +518,9 @@ app.post(
     ],
     asyncHandler(async (req, res) => {
         const { username, password, full_name, roll_number, phone, email, department } = req.body;
+        const clientInfo = getClientInfo(req);
+
+        console.log(`[REGISTER_ATTEMPT] Email: ${email}, Username: ${username}, IP: ${clientInfo.ip}, Timestamp: ${clientInfo.timestamp}`);
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -473,12 +540,15 @@ app.post(
             );
 
             await logHistory(result.lastID, username, 'REGISTER', 'New member registration');
+            console.log(`[REGISTER_SUCCESS] User ID: ${result.lastID}, Email: ${email}, Username: ${username}, IP: ${clientInfo.ip}, Timestamp: ${clientInfo.timestamp}`);
             res.status(201).json({ id: result.lastID, message: 'Registration successful.' });
         } catch (err) {
             if (err.message.includes('UNIQUE constraint failed')) {
+                console.warn(`[REGISTER_FAIL] Duplicate entry - Email: ${email}, Username: ${username}, IP: ${clientInfo.ip}, Error: UNIQUE constraint, Timestamp: ${clientInfo.timestamp}`);
                 res.status(400).json({ error: 'Username, email, or roll number already exists.' });
                 return;
             }
+            console.error(`[REGISTER_FAIL] Email: ${email}, Username: ${username}, IP: ${clientInfo.ip}, Error: ${err.message}, Timestamp: ${clientInfo.timestamp}`);
             throw err;
         }
     })
@@ -486,6 +556,7 @@ app.post(
 
 app.post(
     '/login',
+    authRateLimiter,
     [
         body('email').optional().isString().trim(),
         body('username').optional().isString().trim(),
@@ -505,6 +576,7 @@ app.post(
     ],
     asyncHandler(async (req, res) => {
         const { email, username, password } = req.body;
+        const clientInfo = getClientInfo(req);
         const identifierSource = typeof email === 'string' && email.length ? email : username;
         const identifier = (identifierSource || '').trim();
         if (!identifier) {
@@ -514,7 +586,7 @@ app.post(
         const normalizedIdentifier = identifier.toLowerCase();
         const identifierType = email ? 'email' : 'username';
 
-        console.log(`[LOGIN_ATTEMPT] ${identifierType.toUpperCase()}: ${identifier}`);
+        console.log(`[LOGIN_ATTEMPT] ${identifierType.toUpperCase()}: ${identifier}, IP: ${clientInfo.ip}, UserAgent: ${clientInfo.userAgent}, Timestamp: ${clientInfo.timestamp}`);
 
         const user = await dbGet(
             'SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?',
@@ -522,14 +594,14 @@ app.post(
         );
 
         if (!user) {
-            console.warn(`[LOGIN_FAIL] User not found: ${identifier}`);
+            console.warn(`[LOGIN_FAIL] User not found: ${identifier}, IP: ${clientInfo.ip}, Timestamp: ${clientInfo.timestamp}`);
             res.status(400).json({ error: 'Invalid credentials.' });
             return;
         }
 
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
-            console.warn(`[LOGIN_FAIL] Invalid password for user: ${user.username} (ID: ${user.id})`);
+            console.warn(`[LOGIN_FAIL] Invalid password for user: ${user.username} (ID: ${user.id}), IP: ${clientInfo.ip}, Timestamp: ${clientInfo.timestamp}`);
             res.status(400).json({ error: 'Invalid credentials.' });
             return;
         }
@@ -540,6 +612,8 @@ app.post(
             { expiresIn: '24h' }
         );
 
+        console.log(`[LOGIN_SUCCESS] User: ${user.username} (ID: ${user.id}), Email: ${user.email}, Role: ${user.role}, IP: ${clientInfo.ip}, Timestamp: ${clientInfo.timestamp}`);
+        await logHistory(user.id, user.username, 'LOGIN', `User logged in via ${identifierType}`);
         res.json({ token, user: sanitizeUser(user) });
     })
 );
@@ -739,41 +813,50 @@ app.put(
     })
 );
 
-// Bulk register users from CSV/JSON
+// Bulk register users from CSV/JSON - Optimized with parallel hashing
 app.post(
     '/users/bulk-register',
-    [authenticateToken, isAdmin, body('users').isArray({ min: 1 }), validate],
+    [authenticateToken, isAdmin, body('users').isArray({ min: 1, max: 100 }), validate],
     asyncHandler(async (req, res) => {
         const { users } = req.body;
         const results = { success: [], failed: [] };
-
+        
+        // Pre-validate all users first (no DB calls)
+        const validUsers = [];
         for (const userData of users) {
-            try {
-                const { full_name, roll_number, gender, phone, email, department, branch, password } = userData;
-
-                if (!email || !full_name) {
-                    results.failed.push({ email: email || 'unknown', error: 'Email and full_name are required' });
-                    continue;
-                }
-
-                // Generate password if not provided (use roll_number or random)
-                const userPassword = password || roll_number || Math.random().toString(36).slice(-8);
-                const hashedPassword = await bcrypt.hash(userPassword, 10);
-
-                // Generate username from email
-                const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-
-                await dbRun(
-                    `INSERT INTO users (username, password, role, full_name, roll_number, gender, phone, email, department, branch, is_verified)
-                     VALUES (?, ?, 'member', ?, ?, ?, ?, ?, ?, ?, 1)`,
-                    [username, hashedPassword, full_name, roll_number || null, gender || null, phone || null, email, department || null, branch || null]
-                );
-
-                results.success.push({ email, full_name, generated_password: password ? undefined : userPassword });
-            } catch (err) {
-                results.failed.push({ email: userData.email || 'unknown', error: err.message });
+            const { full_name, email } = userData;
+            if (!email || !full_name) {
+                results.failed.push({ email: email || 'unknown', error: 'Email and full_name are required' });
+                continue;
             }
+            validUsers.push(userData);
         }
+
+        // Parallel password hashing (CPU-bound, safe to parallelize)
+        const hashPromises = validUsers.map(async (userData) => {
+            const userPassword = userData.password || userData.roll_number || Math.random().toString(36).slice(-8);
+            const hashedPassword = await bcrypt.hash(userPassword, 10);
+            const username = userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+            return { ...userData, hashedPassword, username, userPassword };
+        });
+        
+        const preparedUsers = await Promise.all(hashPromises);
+
+        // Use transaction for batch inserts
+        await withTransaction(async () => {
+            for (const userData of preparedUsers) {
+                try {
+                    await dbRun(
+                        `INSERT INTO users (username, password, role, full_name, roll_number, gender, phone, email, department, branch, is_verified)
+                         VALUES (?, ?, 'member', ?, ?, ?, ?, ?, ?, ?, 1)`,
+                        [userData.username, userData.hashedPassword, userData.full_name, userData.roll_number || null, userData.gender || null, userData.phone || null, userData.email, userData.department || null, userData.branch || null]
+                    );
+                    results.success.push({ email: userData.email, full_name: userData.full_name, generated_password: userData.password ? undefined : userData.userPassword });
+                } catch (err) {
+                    results.failed.push({ email: userData.email || 'unknown', error: err.message });
+                }
+            }
+        });
 
         await logHistory(req.user.id, req.user.username, 'BULK_REGISTER', `Registered ${results.success.length} users, ${results.failed.length} failed`);
         res.json(results);
@@ -1202,8 +1285,9 @@ app.get(
         authenticateToken,
         query('action').optional().isString(),
         query('user_id').optional().isInt(),
-        query('limit').optional().isInt({ min: 1, max: 1000 }),
+        query('limit').optional().isInt({ min: 1, max: 200 }),
         query('offset').optional().isInt({ min: 0 }),
+        query('page').optional().isInt({ min: 1 }),
         validate
     ],
     asyncHandler(async (req, res) => {
@@ -1226,8 +1310,11 @@ app.get(
         }
 
         const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-        const limit = Number(req.query.limit) || 100;
-        const offset = Number(req.query.offset) || 0;
+        
+        // Pagination: max 200 records, default 20 per page
+        const limit = Math.min(Number(req.query.limit) || 20, 200);
+        const page = Number(req.query.page) || 1;
+        const offset = req.query.offset !== undefined ? Number(req.query.offset) : (page - 1) * limit;
 
         const sql = `
             SELECT h.*, u.full_name, u.roll_number, u.email, u.department
@@ -1250,12 +1337,19 @@ app.get(
         `;
         const countParams = params.slice(0, -2); // Remove limit and offset
         const countResult = await dbGet(countSql, countParams);
+        const total = Math.min(countResult?.total || 0, 200); // Cap at 200 records
+        const totalPages = Math.ceil(total / limit);
         
+        // Add caching header - history changes frequently but can be cached briefly
+        res.set('Cache-Control', 'private, max-age=30');
         res.json({
             records: history,
-            total: countResult?.total || 0,
+            total,
             limit,
-            offset
+            offset,
+            page,
+            totalPages,
+            hasMore: offset + history.length < total
         });
     })
 );
@@ -1550,6 +1644,9 @@ app.get(
     '/dashboard/summary',
     authenticateToken,
     asyncHandler(async (req, res) => {
+        // Add caching - dashboard data can be cached for 60 seconds
+        res.set('Cache-Control', 'private, max-age=60');
+        
         if (req.user.role === 'admin') {
             const [pendingRequests, activeBorrowings, assignmentsOpen, submissionsPending, recentRequests, recentHistory] = await Promise.all([
                 dbGet("SELECT COUNT(*) AS count FROM requests WHERE status = 'pending'"),
@@ -1615,12 +1712,111 @@ app.get(
     })
 );
 
+// --- Consolidated Dashboard (reduces API calls from 6+ to 1) ---
+app.get(
+    '/dashboard/all',
+    authenticateToken,
+    asyncHandler(async (req, res) => {
+        // Cache for 60 seconds
+        res.set('Cache-Control', 'private, max-age=60');
+        
+        const istDate = new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+        const today = istDate.toISOString().split('T')[0];
+        
+        if (req.user.role === 'admin') {
+            const [
+                pendingRequestsCount,
+                activeBorrowingsCount,
+                assignmentsCount,
+                submissionsPendingCount,
+                recentRequests,
+                recentHistory,
+                pendingRequests,
+                activeBorrowings,
+                articles,
+                departmentStats,
+                competitions
+            ] = await Promise.all([
+                dbGet("SELECT COUNT(*) AS count FROM requests WHERE status = 'pending'"),
+                dbGet('SELECT COUNT(*) AS count FROM borrowings WHERE returned_at IS NULL'),
+                dbGet('SELECT COUNT(*) AS count FROM assignments'),
+                dbGet("SELECT COUNT(*) AS count FROM submissions WHERE status = 'pending'"),
+                dbAll(`SELECT r.*, u.username FROM requests r JOIN users u ON r.user_id = u.id ORDER BY r.requested_at DESC LIMIT 5`),
+                dbAll('SELECT * FROM history ORDER BY timestamp DESC LIMIT 10'),
+                dbAll(`SELECT r.*, u.username, u.full_name AS requester_name FROM requests r JOIN users u ON r.user_id = u.id WHERE r.status = 'pending' ORDER BY r.requested_at DESC`),
+                dbAll(`SELECT b.*, u.username, u.full_name AS borrower_name FROM borrowings b JOIN users u ON b.user_id = u.id WHERE b.returned_at IS NULL ORDER BY b.borrowed_at DESC`),
+                dbAll('SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY published_at DESC, id DESC', [today]),
+                dbAll(`SELECT u.department, COUNT(DISTINCT u.id) AS total_members, COUNT(DISTINCT s.user_id) AS submitted_members, ROUND(100.0 * COUNT(DISTINCT s.user_id) / NULLIF(COUNT(DISTINCT u.id), 0), 2) AS submission_percentage FROM users u LEFT JOIN submissions s ON u.id = s.user_id WHERE u.role = 'member' AND u.department IS NOT NULL GROUP BY u.department`),
+                dbAll('SELECT * FROM competitions ORDER BY start_date DESC LIMIT 10')
+            ]);
+
+            res.json({
+                role: 'admin',
+                summary: {
+                    metrics: {
+                        pendingRequests: pendingRequestsCount?.count || 0,
+                        activeBorrowings: activeBorrowingsCount?.count || 0,
+                        totalAssignments: assignmentsCount?.count || 0,
+                        pendingSubmissions: submissionsPendingCount?.count || 0
+                    },
+                    recent: { requests: recentRequests, history: recentHistory }
+                },
+                requests: pendingRequests,
+                borrowings: activeBorrowings,
+                articles: { fetched_for: today, articles },
+                departmentStats,
+                competitions
+            });
+            return;
+        }
+
+        // Member dashboard
+        const [
+            myPendingCount,
+            myBorrowingsCount,
+            assignmentsForDept,
+            myRequests,
+            myBorrowings,
+            articles,
+            competitions
+        ] = await Promise.all([
+            dbGet("SELECT COUNT(*) AS count FROM requests WHERE user_id = ? AND status = 'pending'", [req.user.id]),
+            dbGet('SELECT COUNT(*) AS count FROM borrowings WHERE user_id = ? AND returned_at IS NULL', [req.user.id]),
+            dbAll('SELECT * FROM assignments WHERE department = ? ORDER BY due_date ASC LIMIT 5', [req.user.department || '']),
+            dbAll('SELECT * FROM requests WHERE user_id = ? ORDER BY requested_at DESC LIMIT 10', [req.user.id]),
+            dbAll('SELECT * FROM borrowings WHERE user_id = ? ORDER BY borrowed_at DESC LIMIT 10', [req.user.id]),
+            dbAll('SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY published_at DESC, id DESC', [today]),
+            dbAll('SELECT * FROM competitions ORDER BY start_date DESC LIMIT 5')
+        ]);
+
+        res.json({
+            role: 'member',
+            summary: {
+                metrics: {
+                    pendingRequests: myPendingCount?.count || 0,
+                    activeBorrowings: myBorrowingsCount?.count || 0,
+                    assignmentsAvailable: assignmentsForDept.length
+                },
+                recent: { requests: myRequests.slice(0, 5), borrowings: myBorrowings.slice(0, 5), assignments: assignmentsForDept }
+            },
+            requests: myRequests,
+            borrowings: myBorrowings,
+            articles: { fetched_for: today, articles },
+            competitions
+        });
+    })
+);
+
 // --- Robotics Articles ---
 app.get(
     '/articles',
     authenticateToken,
     asyncHandler(async (req, res) => {
-        const today = new Date().toISOString().split('T')[0];
+        // Cache articles for 5 minutes (fetched twice daily)
+        res.set('Cache-Control', 'private, max-age=300');
+        
+        const istDate = new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+        const today = istDate.toISOString().split('T')[0];
 
         let targetDate = today;
         let rows = await dbAll(
@@ -1646,7 +1842,6 @@ app.get(
 app.post(
     '/articles/refresh',
     authenticateToken,
-    isAdmin,
     asyncHandler(async (req, res) => {
         await fetchAndStoreArticles();
         res.json({ message: 'Article refresh triggered.' });
@@ -1809,7 +2004,7 @@ app.put(
         }
 
         updates.push('updated_at = ?');
-        params.push(new Date().toISOString());
+        params.push(getISTISOString());
         params.push(projectId);
 
         await dbRun(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`, params);
@@ -1879,7 +2074,7 @@ app.put(
 
         await dbRun(
             `UPDATE project_volunteers SET status = ?, resolved_at = ?, resolved_by = ? WHERE id = ?`,
-            [status, new Date().toISOString(), req.user.id, volunteerId]
+            [status, getISTISOString(), req.user.id, volunteerId]
         );
 
         await logHistory(req.user.id, req.user.username, 'RESOLVE_VOLUNTEER', `${status} volunteer application ${volunteerId}`);
@@ -1947,7 +2142,7 @@ app.put(
 
         await dbRun(
             `UPDATE competition_volunteers SET status = ?, resolved_at = ?, resolved_by = ? WHERE id = ?`,
-            [status, new Date().toISOString(), req.user.id, volunteerId]
+            [status, getISTISOString(), req.user.id, volunteerId]
         );
 
         await logHistory(req.user.id, req.user.username, 'RESOLVE_COMPETITION_VOLUNTEER', `${status} competition volunteer ${volunteerId}`);
@@ -1995,7 +2190,7 @@ app.use((err, req, res, next) => {
         stack: IS_PRODUCTION ? undefined : err.stack,
         path: req.path,
         method: req.method,
-        timestamp: new Date().toISOString()
+        timestamp: getISTISOString()
     });
 
     // Don't leak error details in production

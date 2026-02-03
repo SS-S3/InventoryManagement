@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDate } from "@/app/lib/date";
 import { Plus, Users, Calendar, Loader, CheckCircle, XCircle, Clock, Briefcase, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
 import { 
@@ -316,7 +317,7 @@ export function ProjectManagement() {
                       {project.start_date && (
                         <span className="flex items-center gap-1 text-neutral-400">
                           <Calendar className="w-4 h-4" />
-                          {new Date(project.start_date).toLocaleDateString()} - {project.end_date ? new Date(project.end_date).toLocaleDateString() : "Ongoing"}
+                          {formatDate(project.start_date)} - {project.end_date ? formatDate(project.end_date) : "Ongoing"}
                         </span>
                       )}
                       <span className="flex items-center gap-1 text-neutral-400">

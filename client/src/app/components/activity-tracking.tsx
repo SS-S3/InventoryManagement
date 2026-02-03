@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { History, Search, Filter, Download, Calendar, User, Package, ArrowUpRight, ArrowDownLeft, Loader } from 'lucide-react';
+import { History, Search, Filter, Download, Calendar, User, Package, ArrowUpRight, ArrowDownLeft, Loader, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/auth-store';
 import { fetchHistory, HistoryRecord } from '@/app/lib/api';
+import { formatDate, formatDateTime } from '@/app/lib/date';
 
 interface Activity {
   id: string;
@@ -16,6 +17,10 @@ interface Activity {
   status: 'completed' | 'pending' | 'overdue';
 }
 
+// Pagination constants
+const PAGE_SIZE = 20;
+const MAX_RECORDS = 200;
+
 export function ActivityTracking() {
   const { token } = useAuthStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,21 +30,29 @@ export function ActivityTracking() {
   const [isLoading, setIsLoading] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   useEffect(() => {
     if (token) {
-      fetchHistoryData();
+      fetchHistoryData(1);
     }
   }, [token]);
 
-  const fetchHistoryData = async () => {
+  const fetchHistoryData = async (page: number = 1) => {
     if (!token) return;
     
     try {
       setIsLoading(true);
-      const response = await fetchHistory(token, { limit: 500 });
+      const response = await fetchHistory(token, { limit: PAGE_SIZE, page });
       
       setHistoryRecords(response.records || []);
+      setTotalRecords(Math.min(response.total || 0, MAX_RECORDS));
+      setTotalPages(Math.min(response.totalPages || Math.ceil((response.total || 0) / PAGE_SIZE), Math.ceil(MAX_RECORDS / PAGE_SIZE)));
+      setCurrentPage(page);
       
       // Transform history records into activity format
       const transformedActivities = transformHistoryToActivities(response.records || []);
@@ -49,6 +62,12 @@ export function ActivityTracking() {
       setActivities([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+      fetchHistoryData(newPage);
     }
   };
 
@@ -99,14 +118,7 @@ export function ActivityTracking() {
       
       return {
         id: record.id.toString(),
-        timestamp: new Date(record.timestamp).toLocaleString('en-US', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true
-        }),
+        timestamp: formatDateTime(record.timestamp),
         memberName: record.full_name || record.username || 'Unknown User',
         memberId: record.roll_number || record.email?.split('@')[0] || `USER-${record.user_id || 'N/A'}`,
         action: parsedAction,
@@ -213,7 +225,7 @@ export function ActivityTracking() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `activity-report-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `activity-report-${formatDate(new Date()).replace(/\//g, '-')}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -398,6 +410,62 @@ export function ActivityTracking() {
             </div>
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="p-4 border-t border-neutral-800 flex items-center justify-between">
+            <div className="text-sm text-neutral-500">
+              Showing {((currentPage - 1) * PAGE_SIZE) + 1} - {Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1 || isLoading}
+                className="p-2 rounded-lg border border-neutral-700 text-neutral-400 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      disabled={isLoading}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                        pageNum === currentPage
+                          ? 'bg-blue-600 text-white'
+                          : 'text-neutral-400 hover:bg-neutral-800'
+                      } disabled:opacity-50`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages || isLoading}
+                className="p-2 rounded-lg border border-neutral-700 text-neutral-400 hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

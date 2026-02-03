@@ -584,17 +584,21 @@ export interface HistoryResponse {
   total: number;
   limit: number;
   offset: number;
+  page: number;
+  totalPages: number;
+  hasMore: boolean;
 }
 
 export async function fetchHistory(
   token: string,
-  params?: { action?: string; user_id?: number; limit?: number; offset?: number }
+  params?: { action?: string; user_id?: number; limit?: number; offset?: number; page?: number }
 ): Promise<HistoryResponse> {
   const queryParams = new URLSearchParams();
   if (params?.action) queryParams.set('action', params.action);
   if (params?.user_id !== undefined) queryParams.set('user_id', params.user_id.toString());
   if (params?.limit !== undefined) queryParams.set('limit', params.limit.toString());
   if (params?.offset !== undefined) queryParams.set('offset', params.offset.toString());
+  if (params?.page !== undefined) queryParams.set('page', params.page.toString());
   
   const queryString = queryParams.toString();
   const path = queryString ? `/history?${queryString}` : '/history';

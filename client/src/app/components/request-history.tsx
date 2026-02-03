@@ -1,6 +1,7 @@
 import { Search, Filter, Calendar, Package, CheckCircle, XCircle, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { fetchRequests, RequestRecord } from '@/app/lib/api';
+import { formatDate } from '@/app/lib/date';
 import { useAuth } from '@/app/providers/auth-provider';
 
 export function RequestHistory() {
@@ -79,11 +80,6 @@ export function RequestHistory() {
     approved: requests.filter((r) => r.status === 'approved').length,
     rejected: requests.filter((r) => r.status === 'rejected').length,
     cancelled: requests.filter((r) => r.status === 'cancelled').length,
-  };
-
-  const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString();
   };
 
   return (

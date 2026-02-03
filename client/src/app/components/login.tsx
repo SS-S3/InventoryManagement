@@ -64,14 +64,14 @@ export function Login({ onLogin, onGoogleLogin, onSwitchToRegister, onForgotPass
             transition={{ delay: 0.2, type: "spring" }}
             className="inline-block mb-4"
           >
-            <img src="/sr.png" alt="Logo" className="w-40 h-40 object-contain" />
+            <img src="/sr.png" alt="Logo" className="w-40 h-35 object-contain rounded-lg border-2 border-white bg-white/10 p-2" />
           </motion.div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-neutral-400 bg-clip-text text-transparent">
             SR-DTU
           </h1>
           <p className="text-neutral-400 mt-2 flex items-center justify-center gap-2">
             <Sparkles className="w-4 h-4" />
-            Sign in to access your account
+            Register to create your account
           </p>
         </div>
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatDate } from "@/app/lib/date";
 import { Package, Clock, CheckCircle, AlertCircle, Loader, ExternalLink, RefreshCw, Newspaper, Trophy, Briefcase, Hand } from "lucide-react";
 import { useAuthStore } from "@/app/stores/auth-store";
 import { useDashboardStore } from "@/app/stores/dashboard-store";
@@ -260,9 +261,9 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
                         )}
                       </div>
                       <div className="text-sm text-neutral-400 space-y-1">
-                        <p>Borrowed: {new Date(borrowing.borrowed_at).toLocaleDateString()}</p>
+                        <p>Borrowed: {formatDate(borrowing.borrowed_at)}</p>
                         {borrowing.expected_return_date && (
-                          <p>Due: {new Date(borrowing.expected_return_date).toLocaleDateString()}</p>
+                          <p>Due: {formatDate(borrowing.expected_return_date)}</p>
                         )}
                         {borrowing.quantity > 1 && <p>Quantity: {borrowing.quantity}</p>}
                       </div>
@@ -307,7 +308,7 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
                       </span>
                     </div>
                     <div className="text-sm text-neutral-400 space-y-1">
-                      <p>Requested: {new Date(request.requested_at).toLocaleDateString()}</p>
+                      <p>Requested: {formatDate(request.requested_at)}</p>
                       {request.quantity > 1 && <p>Quantity: {request.quantity}</p>}
                     </div>
                     <button
@@ -442,7 +443,7 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
                             <h5 className="font-medium text-white">{competition.name}</h5>
                             {competition.start_date && (
                               <span className="text-xs text-neutral-500">
-                                {new Date(competition.start_date).toLocaleDateString()}
+                                {formatDate(competition.start_date)}
                               </span>
                             )}
                           </div>

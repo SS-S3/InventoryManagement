@@ -37,7 +37,7 @@ export function Sidebar({ currentPage, onNavigate, user, onLogout }: SidebarProp
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
       <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-        <img src="/sr.png" alt="Logo" className="w-40 h-40 object-contain" />
+        <img src="/sr.png" alt="Logo" className="w-50 h-50 object-contain" />
         <div>
           <h1 className="text-xl font-semibold text-gray-800">SR-DTU</h1>
           <p className="text-sm text-gray-500">Internal Software</p>

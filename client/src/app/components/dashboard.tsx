@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { formatDate, formatMonthYear } from "@/app/lib/date";
 import { Package, FileText, Clock, CheckCircle, Loader, ExternalLink, RefreshCw, Newspaper, Check, X, Trophy, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useAuthStore } from "@/app/stores/auth-store";
 import { useDashboardStore } from "@/app/stores/dashboard-store";
@@ -100,9 +101,6 @@ export function Dashboard() {
     });
   };
 
-  const formatMonthYear = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  };
 
   const pendingRequests = requests.filter((r) => r.status === "pending");
   const activeBorrowings = borrowings.filter((b) => !b.returned_at);
@@ -238,7 +236,7 @@ export function Dashboard() {
                     </div>
                     <div className="text-sm text-neutral-400 space-y-1">
                       <p>By: {request.requester_name || request.username}</p>
-                      <p>Requested: {new Date(request.requested_at).toLocaleDateString()}</p>
+                      <p>Requested: {formatDate(request.requested_at)}</p>
                     </div>
                     <div className="mt-3 flex gap-2">
                       <button onClick={() => handleApprove(request.id)} disabled={processingId === request.id} className="flex items-center gap-1 px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 text-sm font-medium disabled:opacity-50">
@@ -276,8 +274,8 @@ export function Dashboard() {
                       </div>
                       <div className="text-sm text-neutral-400 space-y-1">
                         <p>By: {borrowing.borrower_name || borrowing.username}</p>
-                        <p>Borrowed: {new Date(borrowing.borrowed_at).toLocaleDateString()}</p>
-                        {borrowing.expected_return_date && <p>Due: {new Date(borrowing.expected_return_date).toLocaleDateString()}</p>}
+                        <p>Borrowed: {formatDate(borrowing.borrowed_at)}</p>
+                        {borrowing.expected_return_date && <p>Due: {formatDate(borrowing.expected_return_date)}</p>}
                       </div>
                     </div>
                   );
@@ -435,7 +433,7 @@ export function Dashboard() {
                             <span className="text-neutral-300 truncate">{comp.name}</span>
                             {comp.start_date && (
                               <span className="text-neutral-500 ml-auto">
-                                {new Date(comp.start_date).toLocaleDateString()}
+                                {formatDate(comp.start_date)}
                               </span>
                             )}
                           </div>

@@ -3,6 +3,7 @@ import { CheckCircle, XCircle, Clock, User, Package, RefreshCw, AlertCircle } fr
 import { fetchRequests, approveRequest, rejectRequest, RequestRecord } from '@/app/lib/api';
 import { useAuth } from '@/app/providers/auth-provider';
 import { toast } from 'sonner';
+import { formatDate } from "@/app/lib/date";
 
 export function MemberRequests() {
   const { token } = useAuth();
@@ -211,11 +212,11 @@ export function MemberRequests() {
                           )}
                           {request.expected_return_date && (
                             <p className="text-sm text-neutral-400">
-                              <span className="font-medium">Expected Return:</span> {new Date(request.expected_return_date).toLocaleDateString()}
+                              <span className="font-medium">Expected Return:</span> {formatDate(request.expected_return_date)}
                             </p>
                           )}
                           <p className="text-xs text-neutral-400 mt-2">
-                            Requested on {new Date(request.requested_at).toLocaleDateString()}
+                            Requested on {formatDate(request.requested_at)}
                           </p>
                         </div>
                       </div>

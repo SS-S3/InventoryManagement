@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { formatDate, formatMonthYear } from "@/app/lib/date";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { Calendar, Filter, Download, Loader, ChevronLeft, ChevronRight, Trophy } from 'lucide-react';
 import {
@@ -149,10 +150,6 @@ export function Reports() {
       }
       return newDate;
     });
-  };
-
-  const formatMonthYear = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
   return (
@@ -421,7 +418,7 @@ export function Reports() {
                             <span className="text-neutral-300 font-medium">{comp.name}</span>
                             {comp.start_date && (
                               <span className="text-neutral-400">
-                                {new Date(comp.start_date).toLocaleDateString()}
+                                {formatDate(comp.start_date)}
                               </span>
                             )}
                           </div>

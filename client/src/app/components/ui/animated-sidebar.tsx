@@ -157,8 +157,8 @@ export const AnimatedSidebar = ({
           <img src="/sr.png" alt="Logo" className="h-10 w-10 object-contain" />
           {open && (
             <div>
-              <h2 className="text-white font-semibold">Lab Inventory</h2>
-              <p className="text-neutral-400 text-xs">Management System</p>
+              <h2 className="text-white font-semibold">SR-DTU</h2>
+              <p className="text-neutral-400 text-xs">Internal Software</p>
             </div>
           )}
         </motion.div>

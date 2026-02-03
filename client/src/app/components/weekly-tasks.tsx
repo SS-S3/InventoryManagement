@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatDate, formatDateTime } from "@/app/lib/date";
 import { Upload, Github, CheckCircle, XCircle, Clock, Loader, Calendar, Download } from "lucide-react";
 import { SubmissionRecord } from "@/app/lib/api";
 import { useAuth } from "@/app/providers/auth-provider";
@@ -568,7 +569,7 @@ export function WeeklyTasks() {
                       )}
                       {assignment.due_date && (
                         <span className="text-xs text-neutral-500 whitespace-nowrap">
-                          Due: {new Date(assignment.due_date).toLocaleDateString()}
+                          Due: {formatDate(assignment.due_date)}
                         </span>
                       )}
                     </div>
@@ -669,14 +670,14 @@ export function WeeklyTasks() {
                     <div>
                       <p className="text-neutral-500">Submitted</p>
                       <p className="text-neutral-300">
-                        {new Date(submission.submitted_at).toLocaleString()}
+                        {formatDateTime(submission.submitted_at)}
                       </p>
                     </div>
                     {submission.graded_at && (
                       <div>
                         <p className="text-neutral-500">Graded</p>
                         <p className="text-neutral-300">
-                          {new Date(submission.graded_at).toLocaleString()}
+                          {formatDateTime(submission.graded_at)}
                         </p>
                       </div>
                     )}

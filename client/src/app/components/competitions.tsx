@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef, memo } from "react";
+import { formatDate } from "@/app/lib/date";
 import { Trophy, Plus, ChevronDown, Loader, Calendar, Users, CheckCircle, XCircle } from "lucide-react";
 import { 
   CompetitionRecord, 
@@ -355,13 +356,7 @@ const CompetitionCard = memo(function CompetitionCard({
   const formattedDate = useMemo(() => {
     const candidate = competition.start_date || competition.end_date;
     if (!candidate) return null;
-    const date = new Date(candidate);
-    if (Number.isNaN(date.getTime())) return candidate;
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return formatDate(candidate);
   }, [competition.end_date, competition.start_date]);
 
   return (
