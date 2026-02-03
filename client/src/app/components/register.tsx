@@ -3,6 +3,7 @@ import { Package, User as UserIcon, Lock, UserCheck, User, Phone, Building, IdCa
 import { motion } from "framer-motion";
 import { BackgroundBeams } from "@/app/components/ui/background-beams";
 import { Button } from "@/app/components/ui/button";
+import { TermsAndPrivacyModal } from "./terms-privacy-modal";
 
 
 interface RegisterProps {
@@ -41,11 +42,19 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
     role: "member",
   });
 
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
       alert("Passwords do not match!");
+      return;
+    }
+
+    if (!termsAccepted) {
+      alert("Please accept the Terms of Service and Privacy Policy to continue.");
       return;
     }
 
@@ -172,7 +181,7 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
                   name="roll_number"
                   value={formData.roll_number}
                   onChange={handleChange}
-                  placeholder="Your roll number (e.g., 21ECE001)"
+                  placeholder="Your roll number (e.g., 23/ECE/001)"
                   className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   required
                 />
@@ -206,7 +215,7 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  placeholder="+91 9876543210"
+                  placeholder="9876543210"
                   className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   required
                 />
@@ -228,6 +237,7 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
                   <option value="software">Software</option>
                   <option value="mechanical">Mechanical</option>
                   <option value="embedded">Embedded</option>
+                  <option value="pr_corporate">PR & Corporate</option>
                 </select>
               </div>
 
@@ -246,7 +256,7 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
                 >
                   <option value="male">Male</option>
                   <option value="female">Female</option>
-                  <option value="other">Other</option>
+                  {/* <option value="other">Other</option> */}
                 </select>
               </div>
 
@@ -261,7 +271,7 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
                   name="branch"
                   value={formData.branch}
                   onChange={handleChange}
-                  placeholder="e.g., ECE, CSE, ME, EEE"
+                  placeholder="e.g., ECE/EE/CSE/IT/SE/MCE/ME/PE/AE/CE/EP"
                   className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   required
                 />
@@ -280,7 +290,7 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  placeholder="Create a strong password"
+                  placeholder="kuch bhi jo yaad rhe - 6 chars min"
                   className="w-full px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   required
                 />
@@ -308,18 +318,28 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
             <div className="flex items-start">
               <input
                 type="checkbox"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
                 className="w-4 h-4 mt-1 text-blue-600 bg-neutral-800 border-neutral-700 rounded focus:ring-blue-500"
                 required
               />
               <label className="ml-2 text-sm text-neutral-400">
                 I agree to the{' '}
-                <span className="text-blue-400 hover:text-blue-300 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-blue-400 hover:text-blue-300 underline transition-colors"
+                >
                   Terms of Service
-                </span>{' '}
+                </button>{' '}
                 and{' '}
-                <span className="text-blue-400 hover:text-blue-300 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="text-blue-400 hover:text-blue-300 underline transition-colors"
+                >
                   Privacy Policy
-                </span>
+                </button>
               </label>
             </div>
 
@@ -354,6 +374,13 @@ export function Register({ onRegister, onSwitchToLogin, isSubmitting, error }: R
           </div>
         </motion.div>
       </motion.div>
+
+      {/* Terms and Privacy Modal */}
+      <TermsAndPrivacyModal
+        isOpen={showTermsModal}
+        onOpenChange={setShowTermsModal}
+        onAccept={() => setTermsAccepted(true)}
+      />
     </div>
   );
 }
