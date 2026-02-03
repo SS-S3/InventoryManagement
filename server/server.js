@@ -21,6 +21,60 @@ const crypto = require('crypto');
 const app = express();
 
 // ===========================================
+// Timezone Configuration - Indian Standard Time
+// ===========================================
+const TIMEZONE = 'Asia/Kolkata'; // Indian Standard Time (IST)
+
+// Helper function to convert Date to IST
+const toIST = (date = new Date()) => {
+    // Create a date string in IST
+    const istString = date.toLocaleString('en-US', { 
+        timeZone: TIMEZONE,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    
+    // Parse and return as Date object
+    return new Date(istString);
+};
+
+// Helper function to get current timestamp in IST (readable format)
+const getISTTimestamp = () => {
+    return new Date().toLocaleString('en-IN', { timeZone: TIMEZONE });
+};
+
+// Helper function to get ISO-like timestamp in IST
+const getISTISOString = () => {
+    const date = new Date();
+    const year = date.toLocaleString('en-US', { timeZone: TIMEZONE, year: 'numeric' });
+    const month = date.toLocaleString('en-US', { timeZone: TIMEZONE, month: '2-digit' });
+    const day = date.toLocaleString('en-US', { timeZone: TIMEZONE, day: '2-digit' });
+    const hour = date.toLocaleString('en-US', { timeZone: TIMEZONE, hour: '2-digit', hour12: false });
+    const minute = date.toLocaleString('en-US', { timeZone: TIMEZONE, minute: '2-digit' });
+    const second = date.toLocaleString('en-US', { timeZone: TIMEZONE, second: '2-digit' });
+    
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
+};
+
+// Helper function for SQLite datetime in IST
+const getSQLiteIST = () => {
+    const date = new Date();
+    const year = date.toLocaleString('en-US', { timeZone: TIMEZONE, year: 'numeric' });
+    const month = date.toLocaleString('en-US', { timeZone: TIMEZONE, month: '2-digit' });
+    const day = date.toLocaleString('en-US', { timeZone: TIMEZONE, day: '2-digit' });
+    const hour = date.toLocaleString('en-US', { timeZone: TIMEZONE, hour: '2-digit', hour12: false });
+    const minute = date.toLocaleString('en-US', { timeZone: TIMEZONE, minute: '2-digit' });
+    const second = date.toLocaleString('en-US', { timeZone: TIMEZONE, second: '2-digit' });
+    
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+};
+
+// ===========================================
 // Environment Configuration
 // ===========================================
 // JWT Secret - MUST be set in production via environment variable
@@ -105,7 +159,12 @@ const limiter = rateLimit({
 app.use(limiter);
 
 app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.status(200).json({ 
+        status: 'ok', 
+        timestamp: getISTISOString(),
+        timezone: TIMEZONE,
+        localTime: getISTTimestamp()
+    });
 });
 
 app.get('/', (req, res) => {
@@ -302,7 +361,7 @@ const normalizeArticleList = (entries, fallbackSource) => {
                 title: title.trim(),
                 url: link,
                 source: entry?.source || extractHost(link) || fallbackSource,
-                published_at: published ? new Date(published).toISOString() : null
+                published_at: published ? getISTISOString() : getISTISOString()
             };
         })
         .filter(Boolean)
@@ -333,7 +392,8 @@ const fetchAndStoreArticles = async () => {
         return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const istDate = new Date(new Date().toLocaleString('en-US', { timeZone: TIMEZONE }));
+    const today = istDate.toISOString().split('T')[0];
     const aggregated = [];
 
     for (const source of ARTICLE_SOURCES) {
@@ -624,7 +684,7 @@ app.post(
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
         // Update user's password
-        await dbRun('UPDATE users SET password = ?, updated_at = datetime("now") WHERE id = ?', [hashedPassword, decoded.userId]);
+        await dbRun('UPDATE users SET password = ?, updated_at = ? WHERE id = ?', [hashedPassword, getSQLiteIST(), decoded.userId]);
 
         // Delete all reset tokens for this user (cleanup old SMS tokens if any)
         await dbRun('DELETE FROM password_reset_tokens WHERE user_id = ?', [decoded.userId]);
@@ -843,7 +903,7 @@ app.post(
             await dbRun(
                 `INSERT INTO transactions (item_id, user_id, type, quantity, date)
                  VALUES (?, ?, 'issue', ?, ?)`,
-                [item_id, req.user.id, quantity, new Date().toISOString()]
+                [item_id, req.user.id, quantity, getISTISOString()]
             );
         });
 
@@ -943,7 +1003,7 @@ app.put(
             return;
         }
 
-        const resolvedAt = new Date().toISOString();
+        const resolvedAt = getISTISOString();
 
         await withTransaction(async () => {
             await dbRun(
@@ -1001,7 +1061,7 @@ app.put(
             `UPDATE requests
              SET status = 'rejected', resolved_at = ?, resolved_by = ?, cancellation_reason = ?
              WHERE id = ?`,
-            [new Date().toISOString(), req.user.id, reason || null, requestId]
+            [getISTISOString(), req.user.id, reason || null, requestId]
         );
 
         await logHistory(req.user.id, req.user.username, 'REQUEST_REJECTED', `Rejected request ${requestId}`);
@@ -1041,7 +1101,7 @@ app.put(
             `UPDATE requests
              SET status = 'cancelled', resolved_at = ?, resolved_by = ?, cancellation_reason = ?
              WHERE id = ?`,
-            [new Date().toISOString(), req.user.id, reason || null, requestId]
+            [getISTISOString(), req.user.id, reason || null, requestId]
         );
 
         await logHistory(req.user.id, req.user.username, 'REQUEST_CANCELLED', `Cancelled request ${requestId}`);
@@ -1127,7 +1187,7 @@ app.put(
 
         await dbRun(
             'UPDATE borrowings SET returned_at = ?, notes = COALESCE(?, notes) WHERE id = ?',
-            [new Date().toISOString(), req.body.notes || null, borrowingId]
+            [getISTISOString(), req.body.notes || null, borrowingId]
         );
 
         await logHistory(req.user.id, req.user.username, 'BORROWING_RETURNED', `Marked borrowing ${borrowingId} as returned`);
@@ -1361,7 +1421,7 @@ app.put(
             `UPDATE submissions
              SET status = ?, feedback = ?, graded_at = ?, graded_by = ?
              WHERE id = ?`,
-            [status, feedback || null, new Date().toISOString(), req.user.id, submissionId]
+            [status, feedback || null, getISTISOString(), req.user.id, submissionId]
         );
 
         if (!result.changes) {
