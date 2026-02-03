@@ -21,7 +21,7 @@ export interface RegisterData {
   roll_number: string;
   phone: string;
   email: string;
-  department: "mechanical" | "software" | "embedded";
+  department: "mechanical" | "software" | "embedded" | "pr_corporate";
   gender: "male" | "female" | "other";
   branch: string;
   role: "member" | "admin";

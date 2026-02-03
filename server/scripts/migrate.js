@@ -76,7 +76,7 @@ const runMigrations = async () => {
         gender TEXT CHECK(gender IN ('male','female','other')),
         phone TEXT,
         email TEXT UNIQUE NOT NULL,
-        department TEXT CHECK(department IN ('mechanical','software','embedded')),
+        department TEXT CHECK(department IN ('mechanical','software','embedded','pr_corporate')),
         branch TEXT,
         is_verified INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

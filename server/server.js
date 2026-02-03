@@ -508,16 +508,18 @@ app.post(
         body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long.'),
         body('full_name').notEmpty().withMessage('Full name is required.').trim(),
         body('roll_number').optional().trim(),
+        body('gender').optional().isIn(['male', 'female', 'other']).withMessage('Invalid gender.'),
         body('phone').optional().trim(),
         body('email').notEmpty().withMessage('Email is required.').isEmail().withMessage('Invalid email address.').normalizeEmail(),
         body('department')
             .optional()
-            .isIn(['mechanical', 'software', 'embedded'])
+            .isIn(['mechanical', 'software', 'embedded', 'pr_corporate'])
             .withMessage('Invalid department.'),
+        body('branch').optional().trim(),
         validate
     ],
     asyncHandler(async (req, res) => {
-        const { username, password, full_name, roll_number, phone, email, department } = req.body;
+        const { username, password, full_name, roll_number, gender, phone, email, department, branch } = req.body;
         const clientInfo = getClientInfo(req);
 
         console.log(`[REGISTER_ATTEMPT] Email: ${email}, Username: ${username}, IP: ${clientInfo.ip}, Timestamp: ${clientInfo.timestamp}`);
@@ -526,16 +528,18 @@ app.post(
 
         try {
             const result = await dbRun(
-                `INSERT INTO users (username, password, role, full_name, roll_number, phone, email, department, is_verified)
-                 VALUES (?, ?, 'member', ?, ?, ?, ?, ?, 1)`,
+                `INSERT INTO users (username, password, role, full_name, roll_number, gender, phone, email, department, branch, is_verified)
+                 VALUES (?, ?, 'member', ?, ?, ?, ?, ?, ?, ?, 1)`,
                 [
                     username,
                     hashedPassword,
                     full_name || null,
                     roll_number || null,
+                    gender || null,
                     phone || null,
                     email || null,
-                    department || null
+                    department || null,
+                    branch || null
                 ]
             );
 
