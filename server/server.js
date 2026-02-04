@@ -114,6 +114,7 @@ const ARTICLE_SOURCES = (process.env.ROBOTICS_ARTICLE_SOURCES || '')
     .map((src) => src.trim())
     .filter(Boolean);
 const ARTICLES_PER_SOURCE = Number(process.env.ROBOTICS_ARTICLE_LIMIT || 5);
+const ARTICLE_SOURCE_PRIORITY_SQL = "CASE WHEN LOWER(COALESCE(source, '')) LIKE '%spectrum.ieee.org%' OR LOWER(COALESCE(source, '')) LIKE '%ieee%' THEN 0 ELSE 1 END";
 
 const rssParser = new RSSParser();
 
@@ -408,6 +409,24 @@ const formatToIST = (dateInput) => {
     }
 };
 
+// Normalize published_at to SQLite-friendly 'YYYY-MM-DD HH:MM:SS' in IST
+const normalizePublishedAt = (dateInput) => {
+    if (!dateInput) return null;
+    try {
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return null;
+        const year = d.toLocaleString('en-US', { timeZone: TIMEZONE, year: 'numeric' });
+        const month = d.toLocaleString('en-US', { timeZone: TIMEZONE, month: '2-digit' });
+        const day = d.toLocaleString('en-US', { timeZone: TIMEZONE, day: '2-digit' });
+        const hour = d.toLocaleString('en-US', { timeZone: TIMEZONE, hour: '2-digit', hour12: false });
+        const minute = d.toLocaleString('en-US', { timeZone: TIMEZONE, minute: '2-digit' });
+        const second = d.toLocaleString('en-US', { timeZone: TIMEZONE, second: '2-digit' });
+        return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+    } catch (e) {
+        return null;
+    }
+};
+
 const normalizeArticleList = (entries, fallbackSource) => {
     if (!Array.isArray(entries)) return [];
     return entries
@@ -444,15 +463,14 @@ const fetchArticlesFromSource = async (sourceUrl) => {
                     const feed = await rssParser.parseString(response.data);
                     return normalizeArticleList(feed.items || [], host);
                 } catch (parseErr) {
-                    console.error(`RSS parseString failed for ${sourceUrl}:`, parseErr.message);
+                    // Swallow parse errors here; fallback to JSON parsing below.
                 }
             }
 
             const data = Array.isArray(response.data) ? response.data : response.data?.articles;
             return normalizeArticleList(data || [], host);
         } catch (httpErr) {
-            console.error(`Failed to fetch articles from ${sourceUrl}:`, httpErr.message);
-            return [];
+            throw new Error(`Failed to fetch articles from ${sourceUrl}: ${httpErr.message}`);
         }
     }
 };
@@ -472,10 +490,19 @@ const fetchAndStoreArticles = async () => {
     );
     
     const aggregated = [];
+    const fetchErrors = [];
     for (const result of fetchResults) {
         if (result.status === 'fulfilled') {
             aggregated.push(...result.value);
+        } else {
+            fetchErrors.push(result.reason?.message || 'Unknown source error');
         }
+    }
+
+    if (fetchErrors.length) {
+        console.warn(`[ARTICLES_REFRESH] ${fetchErrors.length} source(s) failed`, {
+            errors: fetchErrors
+        });
     }
 
     const deduped = [];
@@ -499,7 +526,13 @@ const fetchAndStoreArticles = async () => {
         for (const article of deduped) {
             await dbRun(
                 'INSERT INTO articles (title, url, source, published_at, fetched_for) VALUES (?, ?, ?, ?, ?)',
-                [article.title, article.url, article.source, article.published_at || null, today]
+                [
+                    article.title,
+                    article.url,
+                    article.source,
+                    normalizePublishedAt(article.published_at) || null,
+                    today
+                ]
             );
         }
     });
@@ -1793,7 +1826,7 @@ app.get(
                 dbAll('SELECT * FROM history ORDER BY timestamp DESC LIMIT 10'),
                 dbAll(`SELECT r.*, u.username, u.full_name AS requester_name FROM requests r JOIN users u ON r.user_id = u.id WHERE r.status = 'pending' ORDER BY r.requested_at DESC`),
                 dbAll(`SELECT b.*, u.username, u.full_name AS borrower_name FROM borrowings b JOIN users u ON b.user_id = u.id WHERE b.returned_at IS NULL ORDER BY b.borrowed_at DESC`),
-                dbAll('SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY published_at DESC, id DESC', [today]),
+                dbAll(`SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY ${ARTICLE_SOURCE_PRIORITY_SQL} ASC, (CASE WHEN published_at IS NOT NULL THEN REPLACE(REPLACE(published_at, 'T', ' '), '+05:30', '') ELSE fetched_for || ' 00:00:00' END) DESC, id DESC`, [today]),
                 dbAll(`SELECT u.department, COUNT(DISTINCT u.id) AS total_members, COUNT(DISTINCT s.user_id) AS submitted_members, ROUND(100.0 * COUNT(DISTINCT s.user_id) / NULLIF(COUNT(DISTINCT u.id), 0), 2) AS submission_percentage FROM users u LEFT JOIN submissions s ON u.id = s.user_id WHERE u.role = 'member' AND u.department IS NOT NULL GROUP BY u.department`),
                 dbAll('SELECT * FROM competitions ORDER BY start_date DESC LIMIT 10')
             ]);
@@ -1833,7 +1866,7 @@ app.get(
             dbAll('SELECT * FROM assignments WHERE department = ? ORDER BY due_date ASC LIMIT 5', [req.user.department || '']),
             dbAll('SELECT * FROM requests WHERE user_id = ? ORDER BY requested_at DESC LIMIT 10', [req.user.id]),
             dbAll('SELECT * FROM borrowings WHERE user_id = ? ORDER BY borrowed_at DESC LIMIT 10', [req.user.id]),
-            dbAll('SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY published_at DESC, id DESC', [today]),
+            dbAll(`SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY ${ARTICLE_SOURCE_PRIORITY_SQL} ASC, (CASE WHEN published_at IS NOT NULL THEN REPLACE(REPLACE(published_at, 'T', ' '), '+05:30', '') ELSE fetched_for || ' 00:00:00' END) DESC, id DESC`, [today]),
             dbAll('SELECT * FROM competitions ORDER BY start_date DESC LIMIT 5')
         ]);
 
@@ -1868,7 +1901,7 @@ app.get(
 
         let targetDate = today;
         let rows = await dbAll(
-            'SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY published_at DESC, id DESC',
+            `SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY ${ARTICLE_SOURCE_PRIORITY_SQL} ASC, (CASE WHEN published_at IS NOT NULL THEN REPLACE(REPLACE(published_at, 'T', ' '), '+05:30', '') ELSE fetched_for || ' 00:00:00' END) DESC, id DESC`,
             [targetDate]
         );
 
@@ -1877,7 +1910,7 @@ app.get(
             if (fallback) {
                 targetDate = fallback.fetched_for;
                 rows = await dbAll(
-                    'SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY published_at DESC, id DESC',
+                    `SELECT id, title, url, source, published_at, fetched_for FROM articles WHERE fetched_for = ? ORDER BY ${ARTICLE_SOURCE_PRIORITY_SQL} ASC, (CASE WHEN published_at IS NOT NULL THEN REPLACE(REPLACE(published_at, 'T', ' '), '+05:30', '') ELSE fetched_for || ' 00:00:00' END) DESC, id DESC`,
                     [targetDate]
                 );
             }
@@ -1891,8 +1924,20 @@ app.post(
     '/articles/refresh',
     authenticateToken,
     asyncHandler(async (req, res) => {
-        await fetchAndStoreArticles();
-        res.json({ message: 'Article refresh triggered.' });
+        try {
+            await fetchAndStoreArticles();
+            res.json({ message: 'Article refresh triggered.' });
+        } catch (err) {
+            const errorId = Date.now().toString(36);
+            console.error(`[${errorId}] Error during /articles/refresh:`, {
+                message: err?.message,
+                stack: err?.stack,
+                path: req.path,
+                method: req.method,
+                timestamp: getISTISOString()
+            });
+            res.status(500).json({ error: 'Failed to refresh articles', errorId });
+        }
     })
 );
 
