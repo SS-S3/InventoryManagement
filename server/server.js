@@ -117,6 +117,31 @@ const ARTICLES_PER_SOURCE = Number(process.env.ROBOTICS_ARTICLE_LIMIT || 5);
 
 const rssParser = new RSSParser();
 
+// ===========================================
+// Trust Proxy Configuration
+// ===========================================
+// CRITICAL: Enable trust proxy for correct client IP detection behind proxies
+// (Vercel, AWS ALB, Cloudflare, Nginx, etc.)
+// This allows Express to trust X-Forwarded-For headers and properly set req.ip
+// Allow overriding trust proxy per-deployment. Defaults to `1` (one proxy).
+// Set `TRUST_PROXY=true` to trust all proxies, or set a number for how many
+// trusted proxies are in front of the app (useful for multi-proxy setups).
+const rawTrustProxy = process.env.TRUST_PROXY;
+let TRUST_PROXY;
+if (rawTrustProxy === undefined) {
+    TRUST_PROXY = 1;
+} else if (rawTrustProxy === 'true') {
+    TRUST_PROXY = true;
+} else if (rawTrustProxy === 'false') {
+    TRUST_PROXY = false;
+} else if (!Number.isNaN(Number(rawTrustProxy))) {
+    TRUST_PROXY = Number(rawTrustProxy);
+} else {
+    TRUST_PROXY = rawTrustProxy;
+}
+app.set('trust proxy', TRUST_PROXY);
+console.log('[TRUST_PROXY] set to', TRUST_PROXY);
+
 // Configure Helmet with a CSP and COOP/COEP settings suitable for
 // Google OAuth popups/iframes while keeping security headers in place.
 const cspDirectives = {
@@ -271,6 +296,24 @@ const asyncHandler = (fn) => (req, res, next) => {
 const validate = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+        try {
+            // Sanitize body for logging (don't log passwords)
+            const safeBody = Object.assign({}, req.body || {});
+            if (safeBody.password) safeBody.password = '[REDACTED]';
+            if (safeBody.newPassword) safeBody.newPassword = '[REDACTED]';
+
+            console.warn('[VALIDATION_FAILED]', {
+                path: req.path,
+                ip: req.ip || 'unknown',
+                method: req.method,
+                errors: errors.array(),
+                body: safeBody,
+                timestamp: getISTISOString()
+            });
+        } catch (e) {
+            console.warn('[VALIDATION_LOG_ERROR]', e && e.message);
+        }
+
         return res.status(400).json({ errors: errors.array() });
     }
     next();
@@ -481,20 +524,21 @@ const authRateLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many login attempts. Please try again after 15 minutes.' },
-    keyGenerator: (req) => {
-        // Use X-Forwarded-For for Vercel/proxy environments
-        return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
-    },
     handler: (req, res) => {
-        const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
-        console.warn(`[RATE_LIMIT] Auth rate limit exceeded for IP: ${ip}, path: ${req.path}, timestamp: ${getISTISOString()}`);
+        const xff = req.headers['x-forwarded-for'] || null;
+        console.warn('[RATE_LIMIT] Auth rate limit exceeded', {
+            ip: req.ip,
+            x_forwarded_for: xff,
+            path: req.path,
+            timestamp: getISTISOString()
+        });
         res.status(429).json({ error: 'Too many login attempts. Please try again after 15 minutes.' });
     }
 });
 
 // Helper to get client info for logging
 const getClientInfo = (req) => ({
-    ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown',
+    ip: req.ip || 'unknown',
     userAgent: req.headers['user-agent'] || 'unknown',
     timestamp: getISTISOString()
 });
