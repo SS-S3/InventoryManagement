@@ -48,7 +48,10 @@ InventoryManagement/
 - 📦 **Inventory Management**: Full CRUD for lab equipment with search and filtering
 - 🗺️ **Lab Layout**: Interactive cabinet grid visualization
 - 📊 **Transactions**: Track item issues and returns
-- 📁 **Projects**: Manage projects and allocate resources
+- 📁 **Projects**: Manage projects, allocate resources, and **Split Projects** into multiple teams
+- 🤝 **Volunteer Management**: **Transfer Volunteers** between projects and manage applications
+- 💬 **Project Chats**: Real-time project-specific chat groups for volunteers and leads
+- 🌟 **Opportunities**: Dedicated dashboard for members to discover and join projects/competitions
 - 📅 **Borrowings**: Track borrowed items with return dates
 - 🏆 **Competitions**: Manage events and equipment allocation
 - 👥 **User Management**: Admin controls for user roles and verification
@@ -107,8 +110,8 @@ InventoryManagement/
    - Client: `http://localhost:5173`
 
 5. **Login**
-   - Username: `admin`
-   - Password: `admin123`
+   - Admin: `admin` / `admin@123`
+   - Member: `member` / `member@123`
 
 ---
 
@@ -265,14 +268,21 @@ VITE_API_BASE=http://localhost:8080
 | POST   | `/borrowings`            | Borrow item             |
 | PUT    | `/borrowings/:id/return` | Return borrowed item    |
 
-### Projects & Allocations
+### Projects, Volunteers & Chats
 
-| Method | Endpoint       | Description       |
-| ------ | -------------- | ----------------- |
-| GET    | `/projects`    | Get all projects  |
-| POST   | `/projects`    | Create project    |
-| GET    | `/allocations` | Get allocations   |
-| POST   | `/allocations` | Create allocation |
+| Method | Endpoint                    | Description                          |
+| ------ | --------------------------- | ------------------------------------ |
+| GET    | `/projects`                 | Get all projects                     |
+| POST   | `/projects`                 | Create project                       |
+| POST   | `/projects/split`           | Split project into multiple teams    |
+| POST   | `/projects/transfer`        | Transfer volunteer between projects  |
+| GET    | `/projects/:id/chats`       | Get project chat messages            |
+| POST   | `/projects/:id/chats`       | Send a message to project chat       |
+| GET    | `/volunteers`               | Get all volunteer applications       |
+| POST   | `/volunteer/project`        | Apply for a project                  |
+| POST   | `/volunteer/competition`    | Apply for a competition              |
+| GET    | `/allocations`              | Get allocations                      |
+| POST   | `/allocations`              | Create allocation                    |
 
 ---
 
@@ -307,8 +317,11 @@ cd client && npm test
 ## 🎯 Roadmap
 
 - [x] Migrate from SQLite to Turso in production
+- [x] Project-specific private chat groups
+- [x] Volunteer transfer and project splitting
+- [x] Opportunities discovery dashboard
 - [ ] Email notifications for overdue items
-- [ ] Export data to CSV/Excel
+- [ ] Export data to CSV/Excel (In Progress)
 - [ ] QR code generation for items
 - [ ] Mobile app (React Native)
 - [ ] Real-time updates (WebSockets)
@@ -338,7 +351,7 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ## 👨‍💻 Developer Notes
 
-- Default admin: `admin` / `admin123`
+- Default admin: `admin` / `admin@123`
 - Database auto-initializes on first run
 - All API endpoints (except auth) require JWT token
 - Tailwind `@apply` warnings are expected (processed at build time)

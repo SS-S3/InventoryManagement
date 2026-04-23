@@ -8,6 +8,7 @@ import { useBorrowingsStore } from "@/app/stores/borrowings-store";
 import { useRequestsStore } from "@/app/stores/requests-store";
 import { useArticlesStore } from "@/app/stores/articles-store";
 import { fetchProjects, fetchCompetitions, fetchMyApplications, volunteerForProject, volunteerForCompetition, ProjectRecord, CompetitionRecord, MyApplications } from "@/app/lib/api";
+import { StatCardSkeleton, ListItemSkeleton, Skeleton } from "@/app/components/ui/skeleton";
 
 interface MemberDashboardProps {
   onNavigate: (page: string) => void;
@@ -186,15 +187,7 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
     return undefined;
   };
 
-  const isLoading = dashboardLoading || borrowingsLoading || requestsLoading;
-
-  if (isLoading && !summary) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-[400px]">
-        <Loader className="w-8 h-8 text-violet-500 animate-spin" />
-      </div>
-    );
-  }
+  const isInitialLoading = dashboardLoading && !summary;
 
   return (
     <div className="p-8">
@@ -207,24 +200,28 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.id}
-              className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 hover:border-neutral-700 transition-colors"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className={stat.color + " p-3 rounded-lg"}>
-                  <Icon className="w-6 h-6 text-white" />
+        {isInitialLoading ? (
+          Array(4).fill(0).map((_, i) => <StatCardSkeleton key={i} />)
+        ) : (
+          stats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.id}
+                className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 hover:border-neutral-700 transition-colors"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className={stat.color + " p-3 rounded-lg"}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
                 </div>
+                <h3 className="text-neutral-400 text-sm mb-1">{stat.title}</h3>
+                <p className="text-3xl font-semibold text-white mb-2">{stat.value}</p>
+                <p className="text-sm text-neutral-500">{stat.change}</p>
               </div>
-              <h3 className="text-neutral-400 text-sm mb-1">{stat.title}</h3>
-              <p className="text-3xl font-semibold text-white mb-2">{stat.value}</p>
-              <p className="text-sm text-neutral-500">{stat.change}</p>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -235,7 +232,12 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
             <p className="text-sm text-neutral-400 mt-1">Tools currently in your possession</p>
           </div>
           <div className="p-6">
-            {activeBorrowings.length === 0 ? (
+            {borrowingsLoading && activeBorrowings.length === 0 ? (
+              <div className="space-y-4">
+                <ListItemSkeleton />
+                <ListItemSkeleton />
+              </div>
+            ) : activeBorrowings.length === 0 ? (
               <p className="text-neutral-500 text-center py-8">No active borrowings</p>
             ) : (
               <div className="space-y-4">
@@ -292,7 +294,12 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
             <p className="text-sm text-neutral-400 mt-1">Awaiting admin approval</p>
           </div>
           <div className="p-6">
-            {pendingRequests.length === 0 ? (
+            {requestsLoading && pendingRequests.length === 0 ? (
+              <div className="space-y-4">
+                <ListItemSkeleton />
+                <ListItemSkeleton />
+              </div>
+            ) : pendingRequests.length === 0 ? (
               <p className="text-neutral-500 text-center py-8">No pending requests</p>
             ) : (
               <div className="space-y-4">
@@ -381,7 +388,18 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
           <div className="p-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Active Projects */}
-              {projects.length > 0 && (
+              {projects.length === 0 && volunteeringFor === null ? (
+                <div>
+                  <h4 className="text-sm font-semibold text-neutral-300 mb-3 flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-blue-400" />
+                    Active Projects
+                  </h4>
+                  <div className="space-y-3">
+                    <ListItemSkeleton />
+                    <ListItemSkeleton />
+                  </div>
+                </div>
+              ) : projects.length > 0 && (
                 <div>
                   <h4 className="text-sm font-semibold text-neutral-300 mb-3 flex items-center gap-2">
                     <Briefcase className="w-4 h-4 text-blue-400" />
@@ -434,7 +452,18 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
               )}
 
               {/* Upcoming Competitions */}
-              {competitions.length > 0 && (
+              {competitions.length === 0 && volunteeringFor === null ? (
+                <div>
+                  <h4 className="text-sm font-semibold text-neutral-300 mb-3 flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-yellow-400" />
+                    Upcoming Competitions
+                  </h4>
+                  <div className="space-y-3">
+                    <ListItemSkeleton />
+                    <ListItemSkeleton />
+                  </div>
+                </div>
+              ) : competitions.length > 0 && (
                 <div>
                   <h4 className="text-sm font-semibold text-neutral-300 mb-3 flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-yellow-400" />
@@ -507,9 +536,11 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
           </button>
         </div>
         <div className="p-6">
-          {articlesLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader className="w-6 h-6 text-violet-400 animate-spin" />
+          {articlesLoading && articles.length === 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <ListItemSkeleton />
+              <ListItemSkeleton />
+              <ListItemSkeleton />
             </div>
           ) : articles.length === 0 ? (
             <p className="text-neutral-500 text-center py-8">
