@@ -548,6 +548,15 @@ cron.schedule('0 0,12 * * *', () => {
     timezone: 'Asia/Kolkata'
 });
 
+// Cleanup old project chats
+cron.schedule('0 0 * * *', () => {
+    dbRun("DELETE FROM project_chats WHERE created_at < datetime('now', '-75 days')")
+        .then(res => console.log(`Deleted ${res.changes} old project chats.`))
+        .catch(err => console.error('Scheduled chat cleanup failed:', err.message));
+}, {
+    timezone: 'Asia/Kolkata'
+});
+
 // ===========================================
 // Auth Rate Limiting - Brute-force protection
 // ===========================================
@@ -2268,6 +2277,138 @@ app.get(
     })
 );
 
+
+// --- Project Chats ---
+app.get(
+    '/projects/:id/chats',
+    [authenticateToken, param('id').isInt(), validate],
+    asyncHandler(async (req, res) => {
+        const projectId = Number(req.params.id);
+        const userId = req.user.id;
+        const role = req.user.role;
+
+        let hasAccess = false;
+        if (role === 'admin') {
+            hasAccess = true;
+        } else {
+            const project = await dbGet('SELECT lead_id FROM projects WHERE id = ?', [projectId]);
+            if (project && project.lead_id === userId) {
+                hasAccess = true;
+            } else {
+                const vol = await dbGet("SELECT * FROM project_volunteers WHERE project_id = ? AND user_id = ? AND status = 'accepted'", [projectId, userId]);
+                if (vol) hasAccess = true;
+            }
+        }
+
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Access denied to this project chat' });
+        }
+
+        const chats = await dbAll(`
+            SELECT pc.*, u.full_name as sender_name, u.role as sender_role 
+            FROM project_chats pc 
+            JOIN users u ON pc.sender_id = u.id 
+            WHERE pc.project_id = ? 
+            ORDER BY pc.created_at ASC
+        `, [projectId]);
+        
+        res.json(chats);
+    })
+);
+
+app.post(
+    '/projects/:id/chats',
+    [authenticateToken, param('id').isInt(), body('message').notEmpty(), validate],
+    asyncHandler(async (req, res) => {
+        const projectId = Number(req.params.id);
+        const userId = req.user.id;
+        const { message } = req.body;
+        const role = req.user.role;
+
+        let hasAccess = false;
+        if (role === 'admin') {
+            hasAccess = true;
+        } else {
+            const project = await dbGet('SELECT lead_id FROM projects WHERE id = ?', [projectId]);
+            if (project && project.lead_id === userId) {
+                hasAccess = true;
+            } else {
+                const vol = await dbGet("SELECT * FROM project_volunteers WHERE project_id = ? AND user_id = ? AND status = 'accepted'", [projectId, userId]);
+                if (vol) hasAccess = true;
+            }
+        }
+
+        if (!hasAccess) {
+            return res.status(403).json({ error: 'Access denied to this project chat' });
+        }
+
+        const result = await dbRun(
+            'INSERT INTO project_chats (project_id, sender_id, message) VALUES (?, ?, ?)',
+            [projectId, userId, message]
+        );
+
+        res.status(201).json({ id: result.lastID, message: 'Message sent' });
+    })
+);
+
+// --- Transfer Volunteer ---
+app.post(
+    '/projects/:id/transfer-volunteer',
+    [authenticateToken, isAdmin, param('id').isInt(), body('userId').isInt(), body('newProjectId').isInt(), validate],
+    asyncHandler(async (req, res) => {
+        const fromProjectId = Number(req.params.id);
+        const { userId, newProjectId } = req.body;
+
+        const vol = await dbGet("SELECT * FROM project_volunteers WHERE project_id = ? AND user_id = ?", [fromProjectId, userId]);
+        if (!vol) {
+            return res.status(404).json({ error: 'Volunteer not found in the source project' });
+        }
+
+        const existing = await dbGet("SELECT * FROM project_volunteers WHERE project_id = ? AND user_id = ?", [newProjectId, userId]);
+        if (existing) {
+            return res.status(400).json({ error: 'Volunteer already applied or is in the target project' });
+        }
+
+        await dbRun("UPDATE project_volunteers SET project_id = ? WHERE project_id = ? AND user_id = ?", [newProjectId, fromProjectId, userId]);
+        await logHistory(req.user.id, req.user.username, 'TRANSFER_VOLUNTEER', `Transferred user ${userId} from project ${fromProjectId} to ${newProjectId}`);
+        
+        res.json({ message: 'Volunteer transferred successfully' });
+    })
+);
+
+// --- Split Project ---
+app.post(
+    '/projects/:id/split',
+    [
+        authenticateToken, 
+        isAdmin, 
+        param('id').isInt(), 
+        body('newProjectNames').isArray({ min: 1 }), 
+        validate
+    ],
+    asyncHandler(async (req, res) => {
+        const projectId = Number(req.params.id);
+        const { newProjectNames } = req.body;
+
+        const originalProject = await dbGet("SELECT * FROM projects WHERE id = ?", [projectId]);
+        if (!originalProject) {
+            return res.status(404).json({ error: 'Project not found' });
+        }
+
+        const newProjects = [];
+        for (const name of newProjectNames) {
+            const result = await dbRun(
+                'INSERT INTO projects (name, description, status, lead_id) VALUES (?, ?, ?, ?)',
+                [name, originalProject.description, originalProject.status, originalProject.lead_id]
+            );
+            newProjects.push({ id: result.lastID, name });
+        }
+
+        await logHistory(req.user.id, req.user.username, 'SPLIT_PROJECT', `Split project ${projectId} into ${newProjectNames.join(', ')}`);
+        
+        res.status(201).json({ message: 'Project split successfully', newProjects: newProjects });
+    })
+);
 
 // --- Error Handling ---
 // 404 handler

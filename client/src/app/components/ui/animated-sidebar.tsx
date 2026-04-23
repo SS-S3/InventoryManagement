@@ -18,6 +18,8 @@ import {
   UserPlus,
   FolderKanban,
   Shield,
+  MessageSquare,
+  Compass,
 } from "lucide-react";
 
 interface Link {
@@ -78,6 +80,11 @@ export const AnimatedSidebar = ({
       icon: <FolderKanban className="h-5 w-5" />,
     },
     {
+      label: "Chats",
+      href: "chats",
+      icon: <MessageSquare className="h-5 w-5" />,
+    },
+    {
       label: "Reports",
       href: "reports",
       icon: <FileText className="h-5 w-5" />,
@@ -119,6 +126,16 @@ export const AnimatedSidebar = ({
       label: "Weekly Tasks",
       href: "tasks",
       icon: <CheckSquare className="h-5 w-5" />,
+    },
+    {
+      label: "Opportunities",
+      href: "opportunities",
+      icon: <Compass className="h-5 w-5" />,
+    },
+    {
+      label: "Chats",
+      href: "chats",
+      icon: <MessageSquare className="h-5 w-5" />,
     },
   ];
 

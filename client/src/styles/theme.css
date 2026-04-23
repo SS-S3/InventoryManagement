@@ -182,6 +182,6 @@
   input,
   textarea,
   select {
-    @apply text-neutral-900 placeholder:text-neutral-500;
+    @apply text-foreground placeholder:text-muted-foreground;
   }
 }

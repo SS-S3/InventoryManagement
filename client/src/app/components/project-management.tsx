@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { formatDate } from "@/app/lib/date";
 import { Plus, Users, Calendar, Loader, CheckCircle, XCircle, Clock, Briefcase, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/app/providers/auth-provider";
@@ -8,6 +8,8 @@ import {
   updateProject,
   fetchProjectVolunteers,
   resolveProjectVolunteer,
+  transferVolunteer,
+  splitProject,
   fetchAllUsers,
   ProjectRecord, 
   VolunteerRecord,
@@ -25,6 +27,12 @@ export function ProjectManagement() {
   const [expandedProject, setExpandedProject] = useState<number | null>(null);
   const [processingVolunteer, setProcessingVolunteer] = useState<number | null>(null);
 
+  // New state for Transfer and Split features
+  const [transferState, setTransferState] = useState<{userId: number, fromProjectId: number} | null>(null);
+  const [transferTargetId, setTransferTargetId] = useState<number | "">("");
+  const [splittingProject, setSplittingProject] = useState<ProjectRecord | null>(null);
+  const [splitNames, setSplitNames] = useState<string>("");
+
   const [newProject, setNewProject] = useState({
     name: "",
     description: "",
@@ -33,14 +41,9 @@ export function ProjectManagement() {
     end_date: "",
   });
 
-  useEffect(() => {
-    if (token) {
-      loadProjects();
-      loadUsers();
-    }
-  }, [token]);
 
-  const loadProjects = async () => {
+
+  const loadProjects = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
@@ -51,9 +54,9 @@ export function ProjectManagement() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!token) return;
     try {
       const data = await fetchAllUsers(token);
@@ -61,9 +64,16 @@ export function ProjectManagement() {
     } catch (err) {
       console.error("Failed to load users", err);
     }
-  };
+  }, [token]);
 
-  const loadVolunteers = async (projectId: number) => {
+  useEffect(() => {
+    if (token) {
+      loadProjects();
+      loadUsers();
+    }
+  }, [token, loadProjects, loadUsers]);
+
+  const loadVolunteers = useCallback(async (projectId: number) => {
     if (!token) return;
     try {
       const data = await fetchProjectVolunteers(token, projectId);
@@ -71,7 +81,7 @@ export function ProjectManagement() {
     } catch (err) {
       console.error("Failed to load volunteers", err);
     }
-  };
+  }, [token]);
 
   const handleToggleExpand = (projectId: number) => {
     if (expandedProject === projectId) {
@@ -92,7 +102,7 @@ export function ProjectManagement() {
         }
       });
     }
-  }, [token, projects.length]);
+  }, [token, projects, volunteers, loadVolunteers]);
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,12 +143,48 @@ export function ProjectManagement() {
     try {
       await resolveProjectVolunteer(token, projectId, volunteerId, status);
       await loadVolunteers(projectId);
-      // Refresh projects to update volunteer count
       await loadProjects();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resolve volunteer");
     } finally {
       setProcessingVolunteer(null);
+    }
+  };
+
+  const handleTransferVolunteer = async () => {
+    if (!token || !transferState || !transferTargetId) return;
+    setIsLoading(true);
+    try {
+      await transferVolunteer(token, transferState.fromProjectId, transferState.userId, Number(transferTargetId));
+      setTransferState(null);
+      setTransferTargetId("");
+      await loadVolunteers(transferState.fromProjectId);
+      await loadVolunteers(Number(transferTargetId));
+      await loadProjects();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to transfer volunteer");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSplitProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !splittingProject || !splitNames.trim()) return;
+    
+    const namesArray = splitNames.split(',').map(n => n.trim()).filter(Boolean);
+    if (namesArray.length === 0) return;
+
+    setIsLoading(true);
+    try {
+      await splitProject(token, splittingProject.id, namesArray);
+      setSplittingProject(null);
+      setSplitNames("");
+      await loadProjects();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to split project");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -277,6 +323,46 @@ export function ProjectManagement() {
         </div>
       )}
 
+      {/* Split Project Form */}
+      {splittingProject && (
+        <div className="bg-neutral-900 border border-neutral-700 rounded-lg p-6 mb-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Split Project: {splittingProject.name}</h3>
+          <form onSubmit={handleSplitProject} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-300 mb-2">New Project Names (comma separated)</label>
+              <input
+                type="text"
+                value={splitNames}
+                onChange={e => setSplitNames(e.target.value)}
+                className="w-full px-4 py-2.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                placeholder="Team Alpha, Team Beta"
+                required
+              />
+              <p className="text-xs text-neutral-500 mt-1">This will create new projects with the same details and lead.</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="px-6 py-2.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-all disabled:opacity-60"
+              >
+                {isLoading ? "Splitting..." : "Split Project"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSplittingProject(null);
+                  setSplitNames("");
+                }}
+                className="px-6 py-2.5 bg-neutral-800 text-neutral-300 rounded-lg hover:bg-neutral-700 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Projects List */}
       {isLoading && !projects.length ? (
         <div className="text-center py-12">
@@ -326,28 +412,38 @@ export function ProjectManagement() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={project.status}
-                      onChange={e => handleUpdateStatus(project.id, e.target.value)}
-                      className="px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    >
-                      <option value="planning">Planning</option>
-                      <option value="active">Active</option>
-                      <option value="on_hold">On Hold</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                    <button
-                      onClick={() => handleToggleExpand(project.id)}
-                      className="p-2 bg-neutral-800 rounded-lg hover:bg-neutral-700 transition-colors"
-                    >
-                      {expandedProject === project.id ? (
-                        <ChevronUp className="w-5 h-5 text-neutral-400" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-neutral-400" />
-                      )}
-                    </button>
-                  </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={project.status}
+                        onChange={e => handleUpdateStatus(project.id, e.target.value)}
+                        className="px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      >
+                        <option value="planning">Planning</option>
+                        <option value="active">Active</option>
+                        <option value="on_hold">On Hold</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                      <button
+                        onClick={() => {
+                          setSplittingProject(project);
+                          setSplitNames("");
+                        }}
+                        className="px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm hover:bg-neutral-700 transition-colors"
+                        title="Split Project into multiple teams"
+                      >
+                        Split
+                      </button>
+                      <button
+                        onClick={() => handleToggleExpand(project.id)}
+                        className="p-2 bg-neutral-800 rounded-lg hover:bg-neutral-700 transition-colors"
+                      >
+                        {expandedProject === project.id ? (
+                          <ChevronUp className="w-5 h-5 text-neutral-400" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-neutral-400" />
+                        )}
+                      </button>
+                    </div>
                 </div>
               </div>
 
@@ -391,12 +487,52 @@ export function ProjectManagement() {
                                 </button>
                               </>
                             ) : (
-                              <span className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm ${
-                                vol.status === "accepted" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                              }`}>
-                                {vol.status === "accepted" ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                                {vol.status}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm ${
+                                  vol.status === "accepted" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                                }`}>
+                                  {vol.status === "accepted" ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                                  {vol.status}
+                                </span>
+                                {vol.status === "accepted" && (
+                                  <>
+                                    {transferState?.userId === vol.user_id && transferState?.fromProjectId === project.id ? (
+                                      <div className="flex items-center gap-2 ml-2">
+                                        <select
+                                          value={transferTargetId}
+                                          onChange={(e) => setTransferTargetId(e.target.value)}
+                                          className="px-2 py-1 bg-neutral-800 border border-neutral-700 text-white text-sm rounded-lg"
+                                        >
+                                          <option value="">Select Project</option>
+                                          {projects.filter(p => p.id !== project.id).map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                          ))}
+                                        </select>
+                                        <button 
+                                          onClick={handleTransferVolunteer}
+                                          disabled={!transferTargetId || isLoading}
+                                          className="text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-white"
+                                        >
+                                          Confirm
+                                        </button>
+                                        <button 
+                                          onClick={() => setTransferState(null)}
+                                          className="text-xs text-neutral-400 hover:text-white"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => setTransferState({ userId: vol.user_id, fromProjectId: project.id })}
+                                        className="text-xs text-blue-400 hover:text-blue-300 ml-2"
+                                      >
+                                        Transfer
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                              </div>
                             )}
                           </div>
                         </div>

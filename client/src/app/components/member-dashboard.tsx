@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatDate } from "@/app/lib/date";
 import { Package, Clock, CheckCircle, AlertCircle, Loader, ExternalLink, RefreshCw, Newspaper, Trophy, Briefcase, Hand } from "lucide-react";
+import { useCallback } from "react";
 import { useAuthStore } from "@/app/stores/auth-store";
 import { useDashboardStore } from "@/app/stores/dashboard-store";
 import { useBorrowingsStore } from "@/app/stores/borrowings-store";
@@ -26,17 +27,9 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
   const [myApplications, setMyApplications] = useState<MyApplications | null>(null);
   const [volunteeringFor, setVolunteeringFor] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (token) {
-      fetchSummary(token).catch(() => {});
-      fetchBorrowings(token).catch(() => {});
-      fetchRequests(token, "pending").catch(() => {});
-      fetchArticles(token).catch(() => {});
-      loadOpportunities();
-    }
-  }, [token, fetchSummary, fetchBorrowings, fetchRequests, fetchArticles]);
 
-  const loadOpportunities = async () => {
+
+  const loadOpportunities = useCallback(async () => {
     if (!token) return;
     try {
       const [projectsData, competitionsData, applicationsData] = await Promise.all([
@@ -50,7 +43,17 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
     } catch (error) {
       console.error("Failed to load opportunities", error);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchSummary(token).catch(() => {});
+      fetchBorrowings(token).catch(() => {});
+      fetchRequests(token, "pending").catch(() => {});
+      fetchArticles(token).catch(() => {});
+      loadOpportunities();
+    }
+  }, [token, fetchSummary, fetchBorrowings, fetchRequests, fetchArticles, loadOpportunities]);
 
   const activeBorrowings = borrowings.filter((b) => !b.returned_at);
   const pendingRequests = requests.filter((r) => r.status === "pending");
@@ -172,11 +175,11 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
   };
 
   const getApplicationStatus = (projectId?: number, competitionId?: number) => {
-    if (projectId) {
+    if (projectId !== undefined) {
       const app = myApplications?.projects.find(p => p.project_id === projectId);
       return app?.status;
     }
-    if (competitionId) {
+    if (competitionId !== undefined) {
       const app = myApplications?.competitions.find(c => c.competition_id === competitionId);
       return app?.status;
     }
@@ -360,7 +363,7 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
       {/* Project & Competition Opportunities */}
       {(projects.length > 0 || competitions.length > 0) && (
         <div className="mt-6 bg-neutral-900 rounded-xl border border-neutral-800">
-          <div className="p-6 border-b border-neutral-800">
+          <div className="p-6 border-b border-neutral-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Hand className="w-5 h-5 text-violet-400" />
               <div>
@@ -368,6 +371,12 @@ export function MemberDashboard({ onNavigate }: MemberDashboardProps) {
                 <p className="text-sm text-neutral-400">Join projects and competitions</p>
               </div>
             </div>
+            <button 
+              onClick={() => onNavigate("opportunities")}
+              className="text-sm text-violet-400 hover:text-violet-300 font-medium"
+            >
+              View All Opportunities →
+            </button>
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

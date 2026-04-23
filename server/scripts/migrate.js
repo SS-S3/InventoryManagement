@@ -45,6 +45,7 @@ const runMigrations = async () => {
         'competition_items',
         'competition_volunteers',
         'competitions',
+        'project_chats',
         'allocations',
         'project_volunteers',
         'projects',
@@ -53,8 +54,13 @@ const runMigrations = async () => {
         'users'
     ];
 
+    // Drop tables in reverse order to satisfy constraints if PRAGMA doesn't work
     for (const table of dropTargets) {
-        await runStatement(`DROP TABLE IF EXISTS ${table}`);
+        try {
+            await runStatement(`DROP TABLE IF EXISTS ${table}`);
+        } catch (e) {
+            console.warn(`Initial drop failed for ${table}, will retry: ${e.message}`);
+        }
     }
 
     try {
@@ -227,6 +233,16 @@ const runMigrations = async () => {
         allocated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(item_id) REFERENCES items(id),
         FOREIGN KEY(project_id) REFERENCES projects(id)
+    )`);
+
+    await runStatement(`CREATE TABLE project_chats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        sender_id INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(project_id) REFERENCES projects(id),
+        FOREIGN KEY(sender_id) REFERENCES users(id)
     )`);
 
     await runStatement(`CREATE TABLE competition_items (

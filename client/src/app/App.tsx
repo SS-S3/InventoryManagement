@@ -19,6 +19,8 @@ import { RequestHistory } from "@/app/components/request-history";
 import { AdminRecruit } from "@/app/components/admin-recruit";
 import { ProjectManagement } from "@/app/components/project-management";
 import { UserManagement } from "@/app/components/user-management";
+import { ProjectChats } from "@/app/components/chats";
+import { Opportunities } from "@/app/components/opportunities";
 import { useAuth } from "@/app/providers/auth-provider";
 
 const DEFAULT_ADMIN_PAGE = "dashboard";
@@ -94,6 +96,10 @@ export default function App() {
           return <RequestHistory />;
         case "tasks":
           return <WeeklyTasks />;
+        case "chats":
+          return <ProjectChats />;
+        case "opportunities":
+          return <Opportunities />;
         default:
           return <MemberDashboard onNavigate={setCurrentPage} />;
       }
@@ -120,6 +126,8 @@ export default function App() {
         return <AdminRecruit />;
       case "projects":
         return <ProjectManagement />;
+      case "chats":
+        return <ProjectChats />;
       case "users":
         return <UserManagement />;
       default:

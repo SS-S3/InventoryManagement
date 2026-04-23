@@ -76,65 +76,33 @@ const seed = async () => {
 
         await runStatement('PRAGMA foreign_keys = ON');
 
-        const adminUser = {
-            username: 'admin',
-            password: 'admin123',
-            role: 'admin',
-            fullName: 'System Admin',
-            rollNumber: 'ADMIN001',
-            gender: 'male',
-            phone: '+10000000000',
-            email: 'admin@example.com',
-            department: 'software',
-            branch: 'CSE'
-        };
-
-        const memberUser = {
-            username: 'member',
-            password: 'member123',
-            role: 'member',
-            fullName: 'Core Member',
-            rollNumber: 'MEMBER001',
-            gender: 'female',
-            phone: '+10000000001',
-            email: 'member@example.com',
-            department: 'mechanical',
-            branch: 'ME'
-        };
-
-        const adminHash = await hashPassword(adminUser.password);
-        const memberHash = await hashPassword(memberUser.password);
+        const users = [
+            { username: 'admin', password: 'admin@123', role: 'admin', fullName: 'System Admin', email: 'admin@example.com', rollNumber: 'ADMIN001' },
+            { username: 'member', password: 'member@123', role: 'member', fullName: 'John Member', email: 'member@example.com', rollNumber: 'MEMBER001' },
+            { username: 'member2', password: 'member@123', role: 'member', fullName: 'Jane Member', email: 'member2@example.com', rollNumber: 'MEMBER002' },
+            { username: 'member3', password: 'member@123', role: 'member', fullName: 'Alice Member', email: 'member3@example.com', rollNumber: 'MEMBER003' }
+        ];
 
         const insertUserSql = `
             INSERT INTO users (username, password, role, full_name, roll_number, gender, phone, email, department, branch, is_verified)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         `;
 
-        await runStatement(insertUserSql, [
-            adminUser.username,
-            adminHash,
-            adminUser.role,
-            adminUser.fullName,
-            adminUser.rollNumber,
-            adminUser.gender,
-            adminUser.phone,
-            adminUser.email,
-            adminUser.department,
-            adminUser.branch
-        ]);
-
-        await runStatement(insertUserSql, [
-            memberUser.username,
-            memberHash,
-            memberUser.role,
-            memberUser.fullName,
-            memberUser.rollNumber,
-            memberUser.gender,
-            memberUser.phone,
-            memberUser.email,
-            memberUser.department,
-            memberUser.branch
-        ]);
+        for (const u of users) {
+            const hash = await hashPassword(u.password);
+            await runStatement(insertUserSql, [
+                u.username,
+                hash,
+                u.role,
+                u.fullName,
+                u.rollNumber,
+                'other',
+                '+10000000000',
+                u.email,
+                'software',
+                'General'
+            ]);
+        }
 
         const items = [
             { name: 'Soldering Iron', category: 'Electronics', description: 'Temperature-controlled soldering iron', quantity: 5, available_quantity: 5 },

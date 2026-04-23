@@ -674,6 +674,54 @@ export async function resolveProjectVolunteer(
   });
 }
 
+// Project Chats & Advanced Management
+export interface ProjectChat {
+  id: number;
+  project_id: number;
+  sender_id: number;
+  message: string;
+  created_at: string;
+  sender_name?: string;
+  sender_role?: string;
+}
+
+export async function fetchProjectChats(token: string, projectId: number): Promise<ProjectChat[]> {
+  return apiRequest<ProjectChat[]>(`/projects/${projectId}/chats`, { token });
+}
+
+export async function sendProjectChat(token: string, projectId: number, message: string): Promise<{ id: number; message: string }> {
+  return apiRequest<{ id: number; message: string }>(`/projects/${projectId}/chats`, {
+    method: "POST",
+    body: { message },
+    token,
+  });
+}
+
+export async function transferVolunteer(
+  token: string,
+  fromProjectId: number,
+  userId: number,
+  newProjectId: number
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/projects/${fromProjectId}/transfer-volunteer`, {
+    method: "POST",
+    body: { userId, newProjectId },
+    token,
+  });
+}
+
+export async function splitProject(
+  token: string,
+  projectId: number,
+  newProjectNames: string[]
+): Promise<{ message: string; newProjects: { id: number; name: string }[] }> {
+  return apiRequest<{ message: string; newProjects: { id: number; name: string }[] }>(`/projects/${projectId}/split`, {
+    method: "POST",
+    body: { newProjectNames },
+    token,
+  });
+}
+
 // Competition volunteers
 export async function fetchCompetitionVolunteers(token: string, competitionId: number): Promise<VolunteerRecord[]> {
   return apiRequest<VolunteerRecord[]>(`/competitions/${competitionId}/volunteers`, { token });
