@@ -79,8 +79,9 @@ export function ProjectChats() {
       await sendProjectChat(token, selectedProjectId, message.trim());
       setMessage("");
       await loadChats(selectedProjectId);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to send message", error);
+      setErrorMsg(error.message || "Failed to send message");
     } finally {
       setIsSending(false);
     }
