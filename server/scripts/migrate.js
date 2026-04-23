@@ -240,9 +240,7 @@ const runMigrations = async () => {
         project_id INTEGER NOT NULL,
         sender_id INTEGER NOT NULL,
         message TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(project_id) REFERENCES projects(id),
-        FOREIGN KEY(sender_id) REFERENCES users(id)
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
     await runStatement(`CREATE TABLE competition_items (
@@ -287,6 +285,20 @@ const runMigrations = async () => {
 
     await runStatement('CREATE INDEX idx_reset_tokens_user ON password_reset_tokens(user_id)');
     await runStatement('CREATE INDEX idx_reset_tokens_expires ON password_reset_tokens(expires_at)');
+
+    // Performance indices
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_requests_user ON requests(user_id)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_borrowings_user ON borrowings(user_id)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_borrowings_returned ON borrowings(returned_at)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_project_volunteers_user ON project_volunteers(user_id)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_competition_volunteers_user ON competition_volunteers(user_id)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_project_chats_project ON project_chats(project_id)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_items_cabinet ON items(cabinet)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_items_category ON items(category)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_history_user ON history(user_id)');
+    await runStatement('CREATE INDEX IF NOT EXISTS idx_articles_date ON articles(fetched_for)');
 
     console.log('Migrations completed successfully.');
 };
