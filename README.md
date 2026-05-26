@@ -358,4 +358,4 @@ This project is open source and available under the [MIT License](LICENSE).
 
 ---
 
-**Built with ❤️ for Robotics Labs**
+**Built with ❤️ for SR-DTU**
